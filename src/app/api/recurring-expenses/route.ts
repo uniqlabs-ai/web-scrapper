@@ -1,21 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { requirePermission } from "@/lib/guards";
+import { logAudit } from "@/lib/audit";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+import { rateLimit } from "@/lib/rate-limit";
+
+const RecurringExpenseSchema = z.object({
+  description: z.string().min(1, "Description required").max(500),
+  amount: z.number().positive("Amount must be positive"),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly", "annual"]).default("monthly"),
+  startDate: z.string().optional(),
+  vendor: z.string().max(200).optional(),
+  categoryId: z.string().optional(),
+  notes: z.string().max(1000).optional(),
+});
 
 /**
  * GET /api/recurring-expenses — List recurring expenses
  */
 export async function GET() {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
 
     const recurring = await prisma.recurringExpense.findMany({
+      take: 500,
       where: { userId },
       orderBy: { nextDueDate: "asc" },
     });
 
+    // Filter out items whose description is an alias of another item
+    const aliasToOwnerId = new Map<string, string>();
+    for (const r of recurring) {
+      try {
+        const parsed = JSON.parse(r.aliases || "[]");
+        if (Array.isArray(parsed)) {
+          for (const alias of parsed) {
+            aliasToOwnerId.set(String(alias).toLowerCase(), r.id);
+          }
+        }
+      } catch (e: unknown) {
+        // RELIABILITY: Log malformed alias JSON instead of silently swallowing
+        log.warn("Malformed aliases JSON", { module: "recurring-expenses", action: "list", meta: { id: r.id, error: e instanceof Error ? e.message : String(e) } });
+      }
+    }
+    const filtered = recurring.filter(r => {
+      const owner = aliasToOwnerId.get(r.description.toLowerCase());
+      return !owner || owner === r.id;
+    });
+
     return NextResponse.json({
-      recurringExpenses: recurring.map((r) => ({
+      recurringExpenses: filtered.map((r) => ({
         id: r.id,
         description: r.description,
         amount: Number(r.amount),
@@ -29,7 +65,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("List recurring error:", error);
+    log.error("List recurring error", { module: "recurring-expenses", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to fetch recurring expenses" }, { status: 500 });
   }
 }
@@ -39,13 +75,15 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
-    const body = await request.json();
-    const { description, amount, frequency, startDate, vendor, categoryId, notes } = body;
-
-    if (!description || !amount) {
-      return NextResponse.json({ error: "Description and amount required" }, { status: 400 });
+    const limited = rateLimit(request, { windowSec: 60, max: 10, prefix: "recurring" });
+    if (limited) return limited;
+    const { userId, organizationId } = await requireTenant();
+    const rawBody = await request.json();
+    const parsed = RecurringExpenseSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
     }
+    const { description, amount, frequency, startDate, vendor, categoryId, notes } = parsed.data;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -54,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     // Calculate next due date based on frequency
     const start = startDate ? new Date(startDate) : new Date();
-    let nextDueDate = new Date(start);
+    const nextDueDate = new Date(start);
 
     // If start is in the past, fast-forward to next occurrence
     const now = new Date();
@@ -86,14 +124,38 @@ export async function POST(request: NextRequest) {
         categoryId,
         notes,
         userId,
-        organizationId: user?.organizationId,
+        organizationId,
       },
     });
 
     return NextResponse.json(re, { status: 201 });
   } catch (error) {
-    console.error("Create recurring error:", error);
+    log.error("Create recurring error", { module: "recurring-expenses", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to create recurring expense" }, { status: 500 });
+  }
+}
+
+/**
+ * PUT /api/recurring-expenses — Toggle active state (resume/pause)
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, isActive } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "ID required" }, { status: 400 });
+    }
+
+    const updated = await prisma.recurringExpense.update({
+      where: { id },
+      data: { isActive: isActive !== false },
+    });
+
+    return NextResponse.json({ success: true, isActive: updated.isActive });
+  } catch (error) {
+    log.error("Toggle recurring error", { module: "recurring-expenses", action: "handler", error: toLogError(error) });
+    return NextResponse.json({ error: "Failed to toggle" }, { status: 500 });
   }
 }
 
@@ -102,11 +164,21 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    const guard = await requirePermission("delete");
+    if (!guard.allowed) return guard.response;
+    const { userId, organizationId } = guard;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
     if (!id) {
       return NextResponse.json({ error: "ID required" }, { status: 400 });
+    }
+
+    // Verify ownership before soft-delete
+    const existing = await prisma.recurringExpense.findFirst({ where: { id, organizationId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Recurring expense not found" }, { status: 404 });
     }
 
     // Soft-delete: deactivate instead of hard delete
@@ -115,9 +187,10 @@ export async function DELETE(request: NextRequest) {
       data: { isActive: false },
     });
 
+    logAudit({ userId, action: "delete", resource: "recurring_expense", resourceId: id, details: { description: existing.description } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete recurring error:", error);
+    log.error("Delete recurring error", { module: "recurring-expenses", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to deactivate" }, { status: 500 });
   }
 }
@@ -128,10 +201,11 @@ export async function DELETE(request: NextRequest) {
  */
 export async function PATCH() {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const now = new Date();
 
     const due = await prisma.recurringExpense.findMany({
+      take: 500,
       where: {
         userId,
         isActive: true,
@@ -192,7 +266,7 @@ export async function PATCH() {
 
     return NextResponse.json({ processed: created, message: `${created} expenses created` });
   } catch (error) {
-    console.error("Process recurring error:", error);
+    log.error("Process recurring error", { module: "recurring-expenses", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to process recurring" }, { status: 500 });
   }
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Sparkles, Loader2 } from "lucide-react";
 
@@ -8,6 +10,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  action?: { type: string; label: string; url?: string; method?: string };
 }
 
 const SUGGESTIONS = [
@@ -48,6 +51,7 @@ export default function CopilotPanel() {
     if (!msg || loading) return;
 
     const userMsg: Message = {
+      // eslint-disable-next-line react-hooks/purity
       id: `u-${Date.now()}`,
       role: "user",
       content: msg,
@@ -65,16 +69,19 @@ export default function CopilotPanel() {
       });
       const data = await res.json();
       const assistantMsg: Message = {
+        // eslint-disable-next-line react-hooks/purity
         id: `a-${Date.now()}`,
         role: "assistant",
         content: data.response || data.error || "Sorry, I couldn't process that.",
         timestamp: new Date(),
+        action: data.action,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch {
       setMessages((prev) => [
         ...prev,
         {
+          // eslint-disable-next-line react-hooks/purity
           id: `e-${Date.now()}`,
           role: "assistant",
           content: "Something went wrong. Please try again.",
@@ -95,7 +102,6 @@ export default function CopilotPanel() {
   const renderMarkdown = (content: string) => {
     return content
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/⚠️/g, '<span class="copilot-warning">⚠️</span>')
       .replace(/\n/g, "<br />");
   };
 
@@ -105,13 +111,14 @@ export default function CopilotPanel() {
       <button
         className="copilot-toggle"
         onClick={() => setIsOpen(!isOpen)}
-        title="Finance Copilot"
+        aria-label={isOpen ? "Close Finance Copilot" : "Open Finance Copilot"}
+        aria-expanded={isOpen}
       >
-        {isOpen ? <X size={20} /> : <Sparkles size={20} />}
+        {isOpen ? <X size={20} aria-hidden="true" /> : <Sparkles size={20} aria-hidden="true" />}
       </button>
 
       {/* Panel */}
-      <div className={`copilot-panel ${isOpen ? "open" : ""}`}>
+      <div className={`copilot-panel ${isOpen ? "open" : ""}`} role="complementary" aria-label="Finance Copilot">
         {/* Header */}
         <div className="copilot-header">
           <div className="copilot-header-left">
@@ -126,9 +133,10 @@ export default function CopilotPanel() {
           <button
             className="btn btn-ghost"
             onClick={() => setIsOpen(false)}
+            aria-label="Close copilot panel"
             style={{ padding: 6 }}
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
@@ -150,6 +158,29 @@ export default function CopilotPanel() {
                     __html: renderMarkdown(msg.content),
                   }}
                 />
+                {msg.action && (
+                  <button
+                    className="btn btn-primary"
+                    style={{ marginTop: 12, fontSize: 13, gap: 6, display: "flex", alignItems: "center" }}
+                    onClick={async () => {
+                      if (msg.action?.type === "api_call" && msg.action.url) {
+                        try {
+                           await fetch(msg.action.url, { method: msg.action.method || "POST" });
+                           const m = [...messages, { 
+                             id: `a-${Date.now()}`, role: "assistant" as const, 
+                             content: `Executed: **${msg.action.label}** successfully.`, timestamp: new Date() 
+                           }];
+                           setMessages(m);
+                        } catch (e) {
+                          clientLog.error("Failed to execute copilot action", "copilot", "action", e);
+                        }
+                      }
+                    }}
+                  >
+                    <Sparkles size={14} />
+                    {msg.action.label}
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -192,14 +223,16 @@ export default function CopilotPanel() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about your finances..."
+            aria-label="Ask your Finance Copilot"
             disabled={loading}
           />
           <button
             className="copilot-send"
             onClick={() => sendMessage()}
             disabled={!input.trim() || loading}
+            aria-label="Send message"
           >
-            <Send size={16} />
+            <Send size={16} aria-hidden="true" />
           </button>
         </div>
       </div>
