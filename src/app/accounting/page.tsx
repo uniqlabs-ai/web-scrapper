@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BookOpen, Plus, X } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { DataTable, ColumnDef } from "@/components/data-table";
 
 interface Account {
   code: string; name: string; type: string; subtype: string; balance: number;
@@ -16,15 +19,15 @@ interface BalanceSheet {
   isBalanced: boolean;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+import { formatCurrency } from "@/lib/currency";
+const fmt = (n: number) => formatCurrency(n);
 
 const TYPE_COLORS: Record<string, string> = {
   asset: "#22C55E", liability: "#EF4444", equity: "#6366F1", revenue: "#F59E0B", expense: "#EC4899",
 };
 
 export default function AccountingPage() {
-  const { toast } = useToast();
+
   const [view, setView] = useState<"chart" | "balance-sheet" | "trial-balance" | "journal">("chart");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [bs, setBs] = useState<BalanceSheet | null>(null);
@@ -66,10 +69,7 @@ export default function AccountingPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}><BookOpen size={24} /> Accounting</h2>
-        <p>Chart of Accounts, Journal Entries & Balance Sheet</p>
-      </div>
+      <PageHeader title="Accounting" description="Chart of Accounts, Journal Entries & Balance Sheet" />
 
       <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "var(--bg-secondary)", padding: 4, borderRadius: 8, width: "fit-content" }}>
         {(["chart", "balance-sheet", "trial-balance", "journal"] as const).map((v) => (
@@ -96,23 +96,31 @@ export default function AccountingPage() {
                   {type.charAt(0).toUpperCase() + type.slice(1)}s ({accts.length})
                 </h3>
               </div>
-              <table>
-                <thead><tr><th>Code</th><th>Account Name</th><th>Subtype</th></tr></thead>
-                <tbody>
-                  {accts.map((a) => (
-                    <tr key={a.code}>
-                      <td><span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: TYPE_COLORS[type] }}>{a.code}</span></td>
-                      <td style={{ fontWeight: 500 }}>{a.name}</td>
-                      <td><span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, background: "rgba(255,255,255,0.04)" }}>{a.subtype}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable
+                columns={[
+                  {
+                    header: "Code",
+                    accessorKey: "code",
+                    cell: (row) => <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: TYPE_COLORS[type] }}>{row.code}</span>,
+                  },
+                  {
+                    header: "Account Name",
+                    accessorKey: "name",
+                    cell: (row) => <span style={{ fontWeight: 500 }}>{row.name}</span>,
+                  },
+                  {
+                    header: "Subtype",
+                    accessorKey: "subtype",
+                    cell: (row) => <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, background: "rgba(255,255,255,0.04)" }}>{row.subtype}</span>,
+                  },
+                ] as ColumnDef<Account>[]}
+                data={accts}
+              />
             </div>
           ))}
         </div>
       ) : view === "balance-sheet" && bs ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <div className="section-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
           {/* Assets */}
           <div className="table-container" style={{ padding: 24 }}>
             <h3 style={{ color: "#22C55E", marginBottom: 16 }}>Assets</h3>
@@ -166,36 +174,52 @@ export default function AccountingPage() {
               {trialBalance.isBalanced ? "✓ BALANCED" : "✗ UNBALANCED"}
             </span>
           </div>
-          <table>
-            <thead>
-              <tr><th>Code</th><th>Account</th><th>Type</th><th style={{ textAlign: "right" }}>Debit</th><th style={{ textAlign: "right" }}>Credit</th></tr>
-            </thead>
-            <tbody>
-              {trialBalance.accounts.map((a) => (
-                <tr key={a.code}>
-                  <td><span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: TYPE_COLORS[a.type] || "#666" }}>{a.code}</span></td>
-                  <td style={{ fontWeight: 500 }}>{a.name}</td>
-                  <td><span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, background: `${TYPE_COLORS[a.type] || "#666"}15`, color: TYPE_COLORS[a.type] || "#666" }}>{a.type}</span></td>
-                  <td style={{ textAlign: "right", fontWeight: a.debit > 0 ? 600 : 400, color: a.debit > 0 ? "var(--text-primary)" : "var(--text-tertiary)" }}>{a.debit > 0 ? fmt(a.debit) : "—"}</td>
-                  <td style={{ textAlign: "right", fontWeight: a.credit > 0 ? 600 : 400, color: a.credit > 0 ? "var(--text-primary)" : "var(--text-tertiary)" }}>{a.credit > 0 ? fmt(a.credit) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{ fontWeight: 800, fontSize: 14 }}>
-                <td colSpan={3}>TOTAL</td>
-                <td style={{ textAlign: "right" }}>{fmt(trialBalance.totalDebits)}</td>
-                <td style={{ textAlign: "right" }}>{fmt(trialBalance.totalCredits)}</td>
-              </tr>
-            </tfoot>
-          </table>
+          <DataTable
+            columns={[
+              {
+                header: "Code",
+                accessorKey: "code",
+                cell: (row) => <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: TYPE_COLORS[row.type] || "#666" }}>{row.code}</span>,
+              },
+              {
+                header: "Account",
+                accessorKey: "name",
+                cell: (row) => <span style={{ fontWeight: 500 }}>{row.name}</span>,
+              },
+              {
+                header: "Type",
+                accessorKey: "type",
+                cell: (row) => <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, background: `${TYPE_COLORS[row.type] || "#666"}15`, color: TYPE_COLORS[row.type] || "#666" }}>{row.type}</span>,
+              },
+              {
+                header: "Debit",
+                accessorKey: "debit",
+                align: "right",
+                cell: (row) => <span style={{ fontWeight: (row.debit as number) > 0 ? 600 : 400, color: (row.debit as number) > 0 ? "var(--text-primary)" : "var(--text-tertiary)" }}>{(row.debit as number) > 0 ? fmt(row.debit as number) : "—"}</span>,
+              },
+              {
+                header: "Credit",
+                accessorKey: "credit",
+                align: "right",
+                cell: (row) => <span style={{ fontWeight: (row.credit as number) > 0 ? 600 : 400, color: (row.credit as number) > 0 ? "var(--text-primary)" : "var(--text-tertiary)" }}>{(row.credit as number) > 0 ? fmt(row.credit as number) : "—"}</span>,
+              },
+            ] as ColumnDef<{ code: string; name: string; type: string; debit: number; credit: number }>[]}
+            data={trialBalance.accounts}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", background: "var(--bg-secondary)", borderTop: "2px solid var(--border-color)", fontWeight: 800, fontSize: 14 }}>
+            <span>TOTAL</span>
+            <div style={{ display: "flex", gap: 32 }}>
+              <span style={{ minWidth: 100, textAlign: "right" }}>{fmt(trialBalance.totalDebits)}</span>
+              <span style={{ minWidth: 100, textAlign: "right" }}>{fmt(trialBalance.totalCredits)}</span>
+            </div>
+          </div>
         </div>
       ) : (
-        <div style={{ textAlign: "center", padding: 60, background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)" }}>
-          <BookOpen size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <h3 style={{ margin: "0 0 8px" }}>Journal Entries</h3>
-          <p style={{ margin: 0, color: "var(--text-secondary)" }}>Record double-entry journal transactions via the API</p>
-        </div>
+        <EmptyState
+          icon={BookOpen}
+          title="Journal Entries"
+          description="Record double-entry journal transactions via the API"
+        />
       )}
     </div>
   );

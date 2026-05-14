@@ -6,6 +6,9 @@ import {
   AlertCircle, Clock, IndianRupee, Calendar, Tag, Building2
 } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { formatCurrency as fmtCurr } from "@/lib/currency";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface Receipt {
   id: string;
@@ -49,7 +52,7 @@ export default function ReceiptsPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/expenses/ocr", {
+      const res = await fetch("/api/receipts/upload", {
         method: "POST",
         body: formData,
       });
@@ -59,11 +62,6 @@ export default function ReceiptsPage() {
         toast("Receipt scanned successfully!", "success");
         loadReceipts();
         setShowUpload(false);
-        // Show extracted data
-        if (data.receipt) {
-          const newReceipt = await fetch(`/api/receipts/${data.receipt.id}`).then(r => r.json());
-          setSelectedReceipt(newReceipt.receipt);
-        }
       } else {
         toast(data.error || "Failed to scan receipt", "error");
       }
@@ -88,24 +86,27 @@ export default function ReceiptsPage() {
   };
 
   const createExpenseFromReceipt = async (receipt: Receipt) => {
-    const extracted = receipt.extractedData ? JSON.parse(receipt.extractedData) : {};
     try {
-      await fetch("/api/expenses", {
+      const res = await fetch("/api/receipts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          description: extracted.description || receipt.fileName,
+          receiptId: receipt.id,
           amount: Number(receipt.extractedAmount) || 0,
-          vendor: receipt.extractedVendor || "",
+          vendorName: receipt.extractedVendor || "Unknown Vendor",
           date: receipt.extractedDate || new Date().toISOString(),
-          source: "receipt_ocr",
-          sourceId: receipt.id,
+          category: receipt.extractedCategory,
+          gstNumber: receipt.extractedGst,
+          notes: "Generated via Document Intelligence"
         }),
       });
+      
+      if (!res.ok) throw new Error("Conversion failed");
+      
       toast("Expense created from receipt!", "success");
       loadReceipts();
       setSelectedReceipt(null);
-    } catch {
+    } catch (e) {
       toast("Failed to create expense", "error");
     }
   };
@@ -124,32 +125,15 @@ export default function ReceiptsPage() {
   };
 
   const formatCurrency = (val: string | null) =>
-    val ? `₹${Number(val).toLocaleString("en-IN")}` : "—";
+    val ? fmtCurr(Number(val)) : "—";
 
   return (
-    <div style={{ padding: "32px 40px", maxWidth: 1200 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
-            <Camera size={28} /> Receipt Scanner
-          </h1>
-          <p style={{ color: "#9CA3AF", marginTop: 4 }}>
-            Scan receipts with AI to auto-fill expenses
-          </p>
-        </div>
-        <button
-          onClick={() => setShowUpload(true)}
-          style={{
-            display: "flex", alignItems: "center", gap: 8,
-            backgroundColor: "#6366F1", color: "white", border: "none",
-            padding: "10px 20px", borderRadius: 8, cursor: "pointer",
-            fontWeight: 600, fontSize: 14,
-          }}
-        >
+    <div>
+      <PageHeader title="Receipt Scanner" description="Scan receipts with AI to auto-fill expenses">
+        <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
           <Upload size={16} /> Scan Receipt
         </button>
-      </div>
+      </PageHeader>
 
       {/* Search */}
       <div style={{ position: "relative", marginBottom: 24, maxWidth: 400 }}>
@@ -159,6 +143,7 @@ export default function ReceiptsPage() {
           placeholder="Search by vendor, category..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search receipts"
           style={{
             width: "100%", padding: "10px 12px 10px 36px",
             backgroundColor: "#1F2937", border: "1px solid #374151",
@@ -173,18 +158,19 @@ export default function ReceiptsPage() {
           position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)",
           display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50,
         }}>
-          <div style={{
+          <div className="responsive-modal" role="dialog" aria-label="Scan receipt" style={{
             backgroundColor: "#1F2937", borderRadius: 12, padding: 32,
             width: 500, maxHeight: "80vh", position: "relative",
           }}>
             <button
               onClick={() => setShowUpload(false)}
               style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#9CA3AF", cursor: "pointer" }}
+              aria-label="Close scan dialog"
             >
               <X size={20} />
             </button>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>
-              📸 Scan Receipt
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+              <Camera size={20} /> Scan Receipt
             </h2>
             <div
               onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
@@ -200,7 +186,7 @@ export default function ReceiptsPage() {
             >
               {uploading ? (
                 <div>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}><Search size={40} style={{ color: "#6366F1" }} /></div>
                   <p style={{ color: "#9CA3AF" }}>Scanning with Gemini Vision...</p>
                   <div style={{
                     width: 200, height: 4, backgroundColor: "#374151",
@@ -243,21 +229,22 @@ export default function ReceiptsPage() {
           position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)",
           display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50,
         }}>
-          <div style={{
+          <div className="responsive-modal" role="dialog" aria-label="Receipt details" style={{
             backgroundColor: "#1F2937", borderRadius: 12, padding: 32,
             width: 560, maxHeight: "80vh", overflow: "auto", position: "relative",
           }}>
             <button
               onClick={() => setSelectedReceipt(null)}
               style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#9CA3AF", cursor: "pointer" }}
+              aria-label="Close receipt details"
             >
               <X size={20} />
             </button>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>
-              📄 Extracted Data
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+              <FileText size={20} /> Extracted Data
             </h2>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className="section-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={{ backgroundColor: "#111827", borderRadius: 8, padding: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>
                   <IndianRupee size={14} /> AMOUNT
@@ -350,18 +337,12 @@ export default function ReceiptsPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: 80, color: "#6B7280" }}>Loading receipts...</div>
       ) : receipts.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: 80, backgroundColor: "#111827",
-          borderRadius: 12, border: "1px solid #1F2937",
-        }}>
-          <Camera size={48} style={{ color: "#374151", margin: "0 auto 16px" }} />
-          <p style={{ fontSize: 18, fontWeight: 600, color: "#9CA3AF", marginBottom: 8 }}>
-            No receipts scanned yet
-          </p>
-          <p style={{ color: "#6B7280", fontSize: 14 }}>
-            Upload a receipt image and AI will extract the details automatically
-          </p>
-        </div>
+        <EmptyState
+          icon={Camera}
+          title="No receipts scanned yet"
+          description="Upload a receipt image and AI will extract the details automatically"
+          action={<button className="btn btn-primary" onClick={() => setShowUpload(true)}><Upload size={16} /> Scan Receipt</button>}
+        />
       ) : (
         <div style={{
           display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { FileText, Calendar, ArrowDown, ArrowUp, Minus, Search, Download } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 interface GSTR3BData {
   type: string;
@@ -40,8 +41,8 @@ interface GSTR1Data {
   totalInvoices: number;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(n);
+import { formatCurrency } from "@/lib/currency";
+const fmt = (n: number) => formatCurrency(n, "INR", { decimals: 2 });
 
 export default function GSTReturnsPage() {
   const [view, setView] = useState<"gstr3b" | "gstr1" | "hsn" | "einvoice">("gstr3b");
@@ -54,12 +55,30 @@ export default function GSTReturnsPage() {
     return d.toISOString().slice(0, 7);
   });
   const [hsnQuery, setHsnQuery] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [hsnResults, setHsnResults] = useState<any[]>([]);
+  const [hsnResults, setHsnResults] = useState<{code: string; description: string; rate?: number; gstRate?: number; type?: string}[]>([]);
   const [hsnLoading, setHsnLoading] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [einvoiceData, setEinvoiceData] = useState<any>(null);
+  const [einvoiceData, setEinvoiceData] = useState<Record<string, unknown> | null>(null);
   const [einvoiceId, setEinvoiceId] = useState("");
+  const [syncing, setSyncing] = useState(false);
+
+  async function syncToClearTax(action: "gstr1" | "gstr3b") {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/gst/cleartax", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, period: month }),
+      });
+      const data = await res.json();
+      if (res.ok) alert(data.message);
+      else alert(data.error || "Failed to sync to ClearTax");
+    } catch (e) {
+      console.error(e);
+      alert("An error occurred while syncing.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function searchHSN() {
     if (!hsnQuery) return;
@@ -101,24 +120,16 @@ export default function GSTReturnsPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <FileText size={24} /> GST Returns
-          </h2>
-          <p>GSTR-1 Sales Register & GSTR-3B Monthly Summary</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            type="month" value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            style={{
-              background: "var(--bg-secondary)", border: "1px solid var(--border-color)",
-              borderRadius: 8, padding: "6px 12px", color: "var(--text-primary)", fontSize: 13,
-            }}
-          />
-        </div>
-      </div>
+      <PageHeader title="GST Returns" description="GSTR-1 Sales Register & GSTR-3B Monthly Summary">
+        <input
+          type="month" value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          style={{
+            background: "var(--bg-secondary)", border: "1px solid var(--border-color)",
+            borderRadius: 8, padding: "6px 12px", color: "var(--text-primary)", fontSize: 13,
+          }}
+        />
+      </PageHeader>
 
       {/* Toggle */}
       <div style={{
@@ -153,18 +164,27 @@ export default function GSTReturnsPage() {
             display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
             <span style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-              <Calendar size={14} /> GSTR-3B due: <strong>{data3b.filingDue}</strong>
+              <Calendar size={14} /> GSTR-3B due: <strong>{data3b?.filingDue}</strong>
             </span>
-            <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: "rgba(234,179,8,0.15)", color: "#F59E0B" }}>PENDING</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: "rgba(234,179,8,0.15)", color: "#F59E0B" }}>PENDING</span>
+              <button 
+                className="btn btn-primary btn-sm" 
+                onClick={() => syncToClearTax("gstr3b")}
+                disabled={syncing}
+              >
+                <ArrowUp size={14} /> {syncing ? "Syncing..." : "Sync to ClearTax"}
+              </button>
+            </div>
           </div>
 
           {/* 3B Summary Table */}
           <div className="table-container" style={{ padding: 24 }}>
-            <h3 style={{ marginBottom: 16 }}>GSTR-3B Summary — {data3b.period}</h3>
+            <h3 style={{ marginBottom: 16 }}>GSTR-3B Summary — {data3b?.period}</h3>
             <table>
               <thead>
                 <tr>
-                  <th>Particulars</th>
+                  <th scope="col">Particulars</th>
                   <th style={{ textAlign: "right" }}>CGST</th>
                   <th style={{ textAlign: "right" }}>SGST</th>
                   <th style={{ textAlign: "right" }}>IGST</th>
@@ -175,24 +195,24 @@ export default function GSTReturnsPage() {
                 <tr>
                   <td style={{ fontWeight: 600 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <ArrowUp size={14} color="#EF4444" /> Outward Supplies ({data3b.outwardSupplies.invoiceCount} invoices)
+                      <ArrowUp size={14} color="#EF4444" /> Outward Supplies ({data3b?.outwardSupplies.invoiceCount} invoices)
                     </span>
                   </td>
-                  <td style={{ textAlign: "right" }}>{fmt(data3b.outwardSupplies.cgst)}</td>
-                  <td style={{ textAlign: "right" }}>{fmt(data3b.outwardSupplies.sgst)}</td>
-                  <td style={{ textAlign: "right" }}>{fmt(data3b.outwardSupplies.igst)}</td>
-                  <td style={{ textAlign: "right", fontWeight: 700 }}>{fmt(data3b.outwardSupplies.totalTax)}</td>
+                  <td style={{ textAlign: "right" }}>{fmt(data3b?.outwardSupplies.cgst || 0)}</td>
+                  <td style={{ textAlign: "right" }}>{fmt(data3b?.outwardSupplies.sgst || 0)}</td>
+                  <td style={{ textAlign: "right" }}>{fmt(data3b?.outwardSupplies.igst || 0)}</td>
+                  <td style={{ textAlign: "right", fontWeight: 700 }}>{fmt(data3b?.outwardSupplies.totalTax || 0)}</td>
                 </tr>
                 <tr>
                   <td style={{ fontWeight: 600 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <ArrowDown size={14} color="#22C55E" /> Input Tax Credit ({data3b.inputTaxCredit.expenseCount} expenses)
+                      <ArrowDown size={14} color="#22C55E" /> Input Tax Credit ({data3b?.inputTaxCredit.expenseCount} expenses)
                     </span>
                   </td>
-                  <td style={{ textAlign: "right", color: "var(--accent-green)" }}>- {fmt(data3b.inputTaxCredit.cgst)}</td>
-                  <td style={{ textAlign: "right", color: "var(--accent-green)" }}>- {fmt(data3b.inputTaxCredit.sgst)}</td>
-                  <td style={{ textAlign: "right", color: "var(--accent-green)" }}>- {fmt(data3b.inputTaxCredit.igst)}</td>
-                  <td style={{ textAlign: "right", color: "var(--accent-green)", fontWeight: 700 }}>- {fmt(data3b.inputTaxCredit.totalITC)}</td>
+                  <td style={{ textAlign: "right", color: "var(--accent-green)" }}>- {fmt(data3b?.inputTaxCredit.cgst || 0)}</td>
+                  <td style={{ textAlign: "right", color: "var(--accent-green)" }}>- {fmt(data3b?.inputTaxCredit.sgst || 0)}</td>
+                  <td style={{ textAlign: "right", color: "var(--accent-green)" }}>- {fmt(data3b?.inputTaxCredit.igst || 0)}</td>
+                  <td style={{ textAlign: "right", color: "var(--accent-green)", fontWeight: 700 }}>- {fmt(data3b?.inputTaxCredit.totalITC || 0)}</td>
                 </tr>
                 <tr style={{ fontSize: 16, fontWeight: 800, borderTop: "2px solid var(--border-color)" }}>
                   <td>
@@ -200,11 +220,11 @@ export default function GSTReturnsPage() {
                       <Minus size={14} /> Net Tax Payable
                     </span>
                   </td>
-                  <td style={{ textAlign: "right" }}>{fmt(data3b.netTaxPayable.cgst)}</td>
-                  <td style={{ textAlign: "right" }}>{fmt(data3b.netTaxPayable.sgst)}</td>
-                  <td style={{ textAlign: "right" }}>{fmt(data3b.netTaxPayable.igst)}</td>
-                  <td style={{ textAlign: "right", color: data3b.netTaxPayable.total > 0 ? "#EF4444" : "#22C55E" }}>
-                    {fmt(data3b.netTaxPayable.total)}
+                  <td style={{ textAlign: "right" }}>{fmt(data3b?.netTaxPayable.cgst || 0)}</td>
+                  <td style={{ textAlign: "right" }}>{fmt(data3b?.netTaxPayable.sgst || 0)}</td>
+                  <td style={{ textAlign: "right" }}>{fmt(data3b?.netTaxPayable.igst || 0)}</td>
+                  <td style={{ textAlign: "right", color: (data3b?.netTaxPayable.total || 0) > 0 ? "#EF4444" : "#22C55E" }}>
+                    {fmt(data3b?.netTaxPayable.total || 0)}
                   </td>
                 </tr>
               </tbody>
@@ -218,7 +238,7 @@ export default function GSTReturnsPage() {
             display: "flex", justifyContent: "space-between",
           }}>
             <span>Taxable Value of Outward Supplies</span>
-            <span style={{ fontWeight: 700, fontSize: 16 }}>{fmt(data3b.outwardSupplies.taxableValue)}</span>
+            <span style={{ fontWeight: 700, fontSize: 16 }}>{fmt(data3b?.outwardSupplies.taxableValue || 0)}</span>
           </div>
         </>
       ) : view === "gstr1" && data1 ? (
@@ -230,48 +250,55 @@ export default function GSTReturnsPage() {
             display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
             <span style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-              <Calendar size={14} /> GSTR-1 due: <strong>{data1.filingDue}</strong>
+              <Calendar size={14} /> GSTR-1 due: <strong>{data1?.filingDue}</strong>
+              <span style={{ marginLeft: 16 }}>Total Invoices: <strong>{data1?.totalInvoices}</strong></span>
             </span>
-            <span style={{ fontSize: 13 }}>Total Invoices: <strong>{data1.totalInvoices}</strong></span>
+            <button 
+              className="btn btn-primary btn-sm" 
+              onClick={() => syncToClearTax("gstr1")}
+              disabled={syncing}
+            >
+              <ArrowUp size={14} /> {syncing ? "Syncing..." : "Sync to ClearTax"}
+            </button>
           </div>
 
           {/* B2B Sales */}
-          {data1.b2b.count > 0 && (
+          {(data1?.b2b.count ?? 0) > 0 && (
             <div className="table-container" style={{ marginBottom: 16 }}>
               <div className="table-header">
-                <h3>B2B Sales — Registered Buyers ({data1.b2b.count})</h3>
+                <h3>B2B Sales — Registered Buyers ({data1?.b2b.count})</h3>
               </div>
               <table>
                 <thead>
                   <tr>
-                    <th>Invoice</th>
-                    <th>Date</th>
-                    <th>Customer</th>
-                    <th>GSTIN</th>
+                    <th scope="col">Invoice</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">GSTIN</th>
                     <th style={{ textAlign: "right" }}>Taxable</th>
                     <th style={{ textAlign: "right" }}>Tax</th>
                     <th style={{ textAlign: "right" }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data1.b2b.entries.map((e, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{e.invoiceNumber}</td>
-                      <td>{e.invoiceDate}</td>
-                      <td>{e.customerName}</td>
-                      <td style={{ fontSize: 11, fontFamily: "monospace" }}>{e.customerGSTIN}</td>
-                      <td style={{ textAlign: "right" }}>{fmt(e.taxableValue)}</td>
-                      <td style={{ textAlign: "right", color: "#F59E0B" }}>{fmt(e.cgst + e.sgst + e.igst)}</td>
-                      <td style={{ textAlign: "right", fontWeight: 700 }}>{fmt(e.invoiceValue)}</td>
+                  {data1?.b2b.entries.map((ent) => (
+                    <tr key={ent.invoiceNumber}>
+                      <td><span style={{ background: "rgba(59,130,246,0.1)", color: "var(--brand-primary)", padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{ent.invoiceNumber}</span></td>
+                      <td>{ent.invoiceDate}</td>
+                      <td>{ent.customerName}</td>
+                      <td style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>{ent.customerGSTIN}</td>
+                      <td style={{ textAlign: "right" }}>{fmt(ent.taxableValue)}</td>
+                      <td style={{ textAlign: "right", color: "var(--text-secondary)" }}>{fmt(ent.cgst + ent.sgst + ent.igst)}</td>
+                      <td style={{ textAlign: "right", fontWeight: 600 }}>{fmt(ent.invoiceValue)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ fontWeight: 700 }}>
                     <td colSpan={4}>B2B Total</td>
-                    <td style={{ textAlign: "right" }}>{fmt(data1.b2b.totalTaxable)}</td>
-                    <td style={{ textAlign: "right", color: "#F59E0B" }}>{fmt(data1.b2b.totalTax)}</td>
-                    <td style={{ textAlign: "right" }}>{fmt(data1.b2b.totalTaxable + data1.b2b.totalTax)}</td>
+                    <td style={{ textAlign: "right" }}>{fmt(data1?.b2b.totalTaxable || 0)}</td>
+                    <td style={{ textAlign: "right", color: "#F59E0B" }}>{fmt(data1?.b2b.totalTax || 0)}</td>
+                    <td style={{ textAlign: "right" }}>{fmt((data1?.b2b.totalTaxable || 0) + (data1?.b2b.totalTax || 0))}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -279,25 +306,25 @@ export default function GSTReturnsPage() {
           )}
 
           {/* B2C Summary */}
-          {data1.b2c.count > 0 && (
+          {(data1?.b2c.count ?? 0) > 0 && (
             <div className="table-container" style={{ padding: 24 }}>
-              <h3 style={{ marginBottom: 12 }}>B2C Sales — Unregistered Buyers ({data1.b2c.count})</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
+              <h3 style={{ marginBottom: 12 }}>B2C Sales — Unregistered Buyers ({data1?.b2c.count})</h3>
+              <div className="responsive-grid-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
                 <div>
                   <p style={{ margin: 0, fontSize: 11, color: "var(--text-secondary)" }}>TAXABLE VALUE</p>
-                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{fmt(data1.b2c.totalTaxable)}</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{fmt(data1?.b2c.totalTaxable || 0)}</p>
                 </div>
                 <div>
                   <p style={{ margin: 0, fontSize: 11, color: "var(--text-secondary)" }}>CGST</p>
-                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{fmt(data1.b2c.cgst)}</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{fmt(data1?.b2c.cgst || 0)}</p>
                 </div>
                 <div>
                   <p style={{ margin: 0, fontSize: 11, color: "var(--text-secondary)" }}>SGST</p>
-                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{fmt(data1.b2c.sgst)}</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{fmt(data1?.b2c.sgst || 0)}</p>
                 </div>
                 <div>
                   <p style={{ margin: 0, fontSize: 11, color: "var(--text-secondary)" }}>IGST</p>
-                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{fmt(data1.b2c.igst)}</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{fmt(data1?.b2c.igst || 0)}</p>
                 </div>
               </div>
             </div>
@@ -312,7 +339,7 @@ export default function GSTReturnsPage() {
           {hsnResults.length > 0 && (
             <div className="table-container">
               <table>
-                <thead><tr><th>Code</th><th>Description</th><th>Rate</th><th>Type</th></tr></thead>
+                <thead><tr><th scope="col">Code</th><th scope="col">Description</th><th scope="col">Rate</th><th scope="col">Type</th></tr></thead>
                 <tbody>
                   {hsnResults.map((r, i) => (
                     <tr key={i}>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Receipt, Calendar, Building2, AlertTriangle, CheckCircle2, ChevronDown, Download } from "lucide-react";
+import { Receipt, Calendar, Building2, CheckCircle2, Download } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 interface VendorTDS {
   vendor: string;
@@ -27,8 +28,8 @@ interface TDSData {
   currentQuarter: { quarter: string };
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+import { formatCurrency } from "@/lib/currency";
+const fmt = (n: number) => formatCurrency(n);
 
 export default function TDSPage() {
   const [data, setData] = useState<TDSData | null>(null);
@@ -73,7 +74,7 @@ export default function TDSPage() {
   if (loading || !data) {
     return (
       <div>
-        <div className="page-header"><h2><Receipt size={24} /> TDS Compliance</h2></div>
+        <PageHeader title="TDS Compliance" description="Tax Deducted at Source" />
         <div style={{ textAlign: "center", padding: 60, color: "var(--text-secondary)" }}>Loading TDS data...</div>
       </div>
     );
@@ -81,13 +82,7 @@ export default function TDSPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Receipt size={24} /> TDS Compliance
-          </h2>
-          <p>{data.fiscalYear} — Tax Deducted at Source</p>
-        </div>
+      <PageHeader title="TDS Compliance" description={`${data.fiscalYear} — Tax Deducted at Source`}>
         <div style={{ display: "flex", gap: 8 }}>
           {data.quarters.map((q) => (
             <button
@@ -100,7 +95,7 @@ export default function TDSPage() {
             </button>
           ))}
         </div>
-      </div>
+      </PageHeader>
 
       {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
@@ -162,14 +157,14 @@ export default function TDSPage() {
           <table>
             <thead>
               <tr>
-                <th>Vendor</th>
-                <th>Section</th>
-                <th style={{ textAlign: "center" }}>Txns</th>
-                <th style={{ textAlign: "right" }}>Gross Amount</th>
-                <th style={{ textAlign: "center" }}>Rate</th>
-                <th style={{ textAlign: "right" }}>TDS Amount</th>
-                <th style={{ textAlign: "right" }}>Net Payable</th>
-                <th>Action</th>
+                <th scope="col">Vendor</th>
+                <th scope="col">Section</th>
+                <th scope="col" style={{ textAlign: "center" }}>Txns</th>
+                <th scope="col" style={{ textAlign: "right" }}>Gross Amount</th>
+                <th scope="col" style={{ textAlign: "center" }}>Rate</th>
+                <th scope="col" style={{ textAlign: "right" }}>TDS Amount</th>
+                <th scope="col" style={{ textAlign: "right" }}>Net Payable</th>
+                <th scope="col">Action</th>
               </tr>
             </thead>
             <tbody>

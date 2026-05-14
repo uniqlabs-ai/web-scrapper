@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowRightLeft, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowRightLeft, RefreshCw } from "lucide-react";
+import { formatCurrency } from "@/lib/currency";
+import { PageHeader } from "@/components/page-header";
 
 interface Rate {
   code: string;
@@ -13,7 +15,7 @@ interface Rate {
 export default function FxPage() {
   const [rates, setRates] = useState<Rate[]>([]);
   const [isLive, setIsLive] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [from, setFrom] = useState("USD");
   const [to, setTo] = useState("INR");
   const [amount, setAmount] = useState("1000");
@@ -43,17 +45,11 @@ export default function FxPage() {
     setTo(from);
   }
 
-  const fmtINR = (n: number) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(n);
+  const fmtINR = (n: number) => formatCurrency(n, "INR", { decimals: 2 });
 
   return (
     <div>
-      <div className="page-header">
-        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <ArrowRightLeft size={24} /> Currency & FX Rates
-        </h2>
-        <p>Exchange rates and multi-currency converter</p>
-      </div>
+      <PageHeader title="Currency & FX Rates" description="Exchange rates and multi-currency converter" />
 
       {/* Converter */}
       <div style={{
@@ -84,7 +80,7 @@ export default function FxPage() {
               borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "var(--text-primary)",
             }}
           >
-            <ArrowRightLeft size={18} />
+            <ArrowRightLeft size={18} aria-hidden="true" />
           </button>
           <div style={{ flex: 1, minWidth: 120 }}>
             <label style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, display: "block" }}>To</label>
@@ -127,10 +123,10 @@ export default function FxPage() {
         <table>
           <thead>
             <tr>
-              <th>Currency</th>
-              <th>Code</th>
-              <th style={{ textAlign: "right" }}>1 Unit = ₹</th>
-              <th style={{ textAlign: "right" }}>₹1,00,000 =</th>
+              <th scope="col">Currency</th>
+              <th scope="col">Code</th>
+              <th scope="col" style={{ textAlign: "right" }}>1 Unit = ₹</th>
+              <th scope="col" style={{ textAlign: "right" }}>₹1,00,000 =</th>
             </tr>
           </thead>
           <tbody>

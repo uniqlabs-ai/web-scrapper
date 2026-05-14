@@ -10,7 +10,8 @@ import {
   Landmark,
 } from "lucide-react";
 import { useToast } from "@/components/toast";
-import { SkeletonTable, SkeletonCard } from "@/components/skeleton";
+import { SkeletonCard } from "@/components/skeleton";
+import { PageHeader } from "@/components/page-header";
 import {
   BarChart,
   Bar,
@@ -73,34 +74,14 @@ interface AgingData {
 
 const CHART_COLORS = ["#6366F1", "#A855F7", "#EC4899", "#F43F5E", "#F59E0B", "#22C55E", "#3B82F6", "#14B8A6"];
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+import { formatCurrency, formatCompact } from "@/lib/currency";
+import { ChartTooltip } from "@/components/chart-tooltip";
+import { ChartAccessibilityWrapper } from "@/components/chart-a11y-wrapper";
+const fmt = (n: number) => formatCurrency(n);
 
-const fmtShort = (n: number) => {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(0)}K`;
-  return `₹${n}`;
-};
+const fmtShort = (n: number) => formatCompact(n);
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: "var(--bg-card)", border: "1px solid var(--border-color)",
-      borderRadius: 8, padding: "10px 14px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-    }}>
-      <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", marginBottom: 6 }}>{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.name} style={{ margin: 0, fontSize: 13, fontWeight: 600, color: p.color }}>
-          {p.name}: {fmt(p.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
+
 
 export default function ReportsPage() {
   const { toast } = useToast();
@@ -156,8 +137,14 @@ export default function ReportsPage() {
     toast("Generating PDF...", "info");
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [comparison, setComparison] = useState<any>(null);
+  interface ComparisonData {
+    period: string;
+    current: { label: string; revenue: number; expenses: number; profit: number; txnCount: number };
+    previous: { label: string; revenue: number; expenses: number; profit: number; txnCount: number };
+    changes: { revenue: number; expenses: number; profit: number };
+    categoryComparison: { category: string; current: number; previous: number; change: number }[];
+  }
+  const [comparison, setComparison] = useState<ComparisonData | null>(null);
   useEffect(() => {
     if (tab === "comparison") {
       fetch(`/api/reports/comparison?period=month&from=${fromDate}&to=${toDate}`)
@@ -173,12 +160,6 @@ export default function ReportsPage() {
     { id: "comparison", label: "Comparison", icon: <DollarSign size={16} /> },
   ];
 
-  // P&L combined chart data
-  const pnlChartData = pnl ? [
-    ...pnl.revenue.map((r) => ({ name: r.label, type: "Revenue", amount: r.amount })),
-    ...pnl.expenses.map((e) => ({ name: e.label, type: "Expense", amount: e.amount })),
-  ] : [];
-
   // Tax pie data
   const taxPieData = tax ? [
     { name: "Output Tax", value: tax.outputTax, color: "#F59E0B" },
@@ -187,22 +168,18 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h2>Reports</h2>
-          <p>Financial intelligence and reporting</p>
-        </div>
+      <PageHeader title="Reports" description="Financial intelligence and reporting">
         {tab === "pnl" && (
-          <div style={{ display: "flex", gap: 8 }}>
+          <>
             <button className="btn btn-secondary" onClick={downloadCSV}>
               <FileDown size={16} /> Export CSV
             </button>
             <button className="btn btn-secondary" onClick={downloadPDF}>
               <FileDown size={16} /> Export PDF
             </button>
-          </div>
+          </>
         )}
-      </div>
+      </PageHeader>
 
       {/* Tab navigation */}
       <div style={{
@@ -229,30 +206,74 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Date Range Picker */}
+      {/* Period Selector Pills + Date Picker */}
       <div style={{
-        display: "flex", gap: 12, marginBottom: 20, alignItems: "center",
-        padding: "10px 16px", background: "var(--bg-card)", borderRadius: 10,
-        border: "1px solid var(--border-color)", width: "fit-content",
+        display: "flex", flexDirection: "column", gap: 12, marginBottom: 20,
       }}>
-        <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>Period:</span>
-        <input
-          type="date" value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-          style={{
-            background: "var(--bg-secondary)", border: "1px solid var(--border-color)",
-            borderRadius: 6, padding: "4px 8px", color: "var(--text-primary)", fontSize: 13,
-          }}
-        />
-        <span style={{ color: "var(--text-tertiary)" }}>→</span>
-        <input
-          type="date" value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
-          style={{
-            background: "var(--bg-secondary)", border: "1px solid var(--border-color)",
-            borderRadius: 6, padding: "4px 8px", color: "var(--text-primary)", fontSize: 13,
-          }}
-        />
+        {/* Quick-select pills */}
+        <div style={{ display: "flex", gap: 6 }}>
+          {(["MTD", "QTD", "YTD", "Custom"] as const).map((pill) => {
+            const isActive = (() => {
+              const n = new Date();
+              const mStart = new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0, 10);
+              const qStart = new Date(n.getFullYear(), Math.floor(n.getMonth() / 3) * 3, 1).toISOString().slice(0, 10);
+              const yStart = new Date(n.getFullYear(), 0, 1).toISOString().slice(0, 10);
+              const today = n.toISOString().slice(0, 10);
+              if (pill === "MTD") return fromDate === mStart && toDate === today;
+              if (pill === "QTD") return fromDate === qStart && toDate === today;
+              if (pill === "YTD") return fromDate === yStart && toDate === today;
+              return false;
+            })();
+            return (
+              <button
+                key={pill}
+                onClick={() => {
+                  const n = new Date();
+                  const today = n.toISOString().slice(0, 10);
+                  if (pill === "MTD") {
+                    setFromDate(new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0, 10));
+                    setToDate(today);
+                  } else if (pill === "QTD") {
+                    setFromDate(new Date(n.getFullYear(), Math.floor(n.getMonth() / 3) * 3, 1).toISOString().slice(0, 10));
+                    setToDate(today);
+                  } else if (pill === "YTD") {
+                    setFromDate(new Date(n.getFullYear(), 0, 1).toISOString().slice(0, 10));
+                    setToDate(today);
+                  }
+                  // Custom: no auto-set, user picks manually
+                }}
+                style={{
+                  padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  border: "1px solid",
+                  borderColor: isActive ? "var(--accent-purple)" : "var(--border-color)",
+                  background: isActive ? "rgba(139, 92, 246, 0.15)" : "transparent",
+                  color: isActive ? "var(--accent-purple)" : "var(--text-secondary)",
+                  cursor: "pointer", transition: "all 0.2s",
+                }}
+              >
+                {pill === "MTD" ? "Month to Date" : pill === "QTD" ? "Quarter to Date" : pill === "YTD" ? "Year to Date" : "Custom"}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Date pickers */}
+        <div style={{
+          display: "flex", gap: 12, alignItems: "center",
+          padding: "10px 16px", background: "var(--bg-card)", borderRadius: 10,
+          border: "1px solid var(--border-color)", width: "fit-content",
+        }}>
+          <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>Period:</span>
+          <input
+            type="date" value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+          <span style={{ color: "var(--text-tertiary)" }}>→</span>
+          <input
+            type="date" value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
       </div>
 
       {loading ? (
@@ -295,6 +316,7 @@ export default function ReportsPage() {
                   </div>
                   {pnl.revenue.length > 0 ? (
                     <div style={{ width: "100%", height: 240 }}>
+                      <ChartAccessibilityWrapper label="Revenue breakdown by category" data={pnl.revenue} dataKeys={["label", "amount"]}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={pnl.revenue} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
@@ -304,6 +326,7 @@ export default function ReportsPage() {
                           <Bar dataKey="amount" name="Revenue" fill="#22C55E" radius={[0, 6, 6, 0]} barSize={20} />
                         </BarChart>
                       </ResponsiveContainer>
+                      </ChartAccessibilityWrapper>
                     </div>
                   ) : (
                     <div className="empty-state" style={{ padding: 40 }}>
@@ -318,6 +341,7 @@ export default function ReportsPage() {
                   </div>
                   {pnl.expenses.length > 0 ? (
                     <div style={{ width: "100%", height: 240 }}>
+                      <ChartAccessibilityWrapper label="Expense breakdown by category" data={pnl.expenses} dataKeys={["label", "amount"]}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={pnl.expenses} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
@@ -331,6 +355,7 @@ export default function ReportsPage() {
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
+                      </ChartAccessibilityWrapper>
                     </div>
                   ) : (
                     <div className="empty-state" style={{ padding: 40 }}>
@@ -369,6 +394,7 @@ export default function ReportsPage() {
                 </div>
                 {cashFlow.projections.length > 0 ? (
                   <div style={{ width: "100%", height: 280 }}>
+                    <ChartAccessibilityWrapper label="Monthly cash flow inflow vs outflow" data={cashFlow.projections} dataKeys={["month", "inflow", "outflow", "net", "balance"]}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={cashFlow.projections} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
                         <defs>
@@ -390,6 +416,7 @@ export default function ReportsPage() {
                         <Area type="monotone" dataKey="outflow" name="Outflow" stroke="#F43F5E" strokeWidth={2} fill="url(#outflowGrad)" dot={{ r: 3, fill: "#F43F5E", strokeWidth: 0 }} />
                       </AreaChart>
                     </ResponsiveContainer>
+                    </ChartAccessibilityWrapper>
                   </div>
                 ) : (
                   <div className="empty-state" style={{ padding: 40 }}>
@@ -404,11 +431,11 @@ export default function ReportsPage() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Month</th>
-                      <th style={{ textAlign: "right" }}>Inflow</th>
-                      <th style={{ textAlign: "right" }}>Outflow</th>
-                      <th style={{ textAlign: "right" }}>Net</th>
-                      <th style={{ textAlign: "right" }}>Balance</th>
+                      <th scope="col">Month</th>
+                      <th scope="col" style={{ textAlign: "right" }}>Inflow</th>
+                      <th scope="col" style={{ textAlign: "right" }}>Outflow</th>
+                      <th scope="col" style={{ textAlign: "right" }}>Net</th>
+                      <th scope="col" style={{ textAlign: "right" }}>Balance</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -458,6 +485,7 @@ export default function ReportsPage() {
                   <div className="chart-header"><h3>GST Breakdown</h3></div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <div style={{ width: 200, height: 200 }}>
+                      <ChartAccessibilityWrapper label="GST breakdown by component" data={taxPieData} dataKeys={["name", "value"]}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -479,6 +507,7 @@ export default function ReportsPage() {
                           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
                         </PieChart>
                       </ResponsiveContainer>
+                      </ChartAccessibilityWrapper>
                     </div>
                   </div>
                 </div>
@@ -507,77 +536,204 @@ export default function ReportsPage() {
             </>
           )}
 
-          {/* Aging Tab */}
-          {tab === "aging" && aging && (
-            <>
-              <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(5, 1fr)", marginBottom: 24 }}>
-                {[
-                  { label: "Current", value: aging.buckets.current, color: "#22C55E" },
-                  { label: "1-30 Days", value: aging.buckets.d1_30, color: "#F59E0B" },
-                  { label: "31-60 Days", value: aging.buckets.d31_60, color: "#F97316" },
-                  { label: "61-90 Days", value: aging.buckets.d61_90, color: "#EF4444" },
-                  { label: "90+ Days", value: aging.buckets.d90_plus, color: "#DC2626" },
-                ].map((b) => (
-                  <div key={b.label} className="kpi-card" style={{ borderColor: `${b.color}30` }}>
-                    <div className="kpi-label">{b.label}</div>
-                    <div className="kpi-value" style={{ fontSize: 20, color: b.color }}>{fmt(b.value)}</div>
+          {/* Aging Tab — Enhanced Analysis */}
+          {tab === "aging" && aging && (() => {
+            // DSO calculation
+            const dso = aging.totalOutstanding > 0 && aging.items.length > 0
+              ? Math.round(aging.items.reduce((sum, i) => sum + i.daysOverdue * i.balance, 0) / aging.totalOutstanding)
+              : 0;
+
+            // At-risk amount (trending toward 90+)
+            const atRisk = aging.items
+              .filter((i) => i.daysOverdue >= 61)
+              .reduce((sum, i) => sum + i.balance, 0);
+
+            // Per-client breakdown
+            const clientMap = new Map<string, { balance: number; count: number; avgDays: number }>();
+            for (const item of aging.items) {
+              const existing = clientMap.get(item.clientName) || { balance: 0, count: 0, avgDays: 0 };
+              existing.balance += item.balance;
+              existing.count++;
+              existing.avgDays = Math.round((existing.avgDays * (existing.count - 1) + item.daysOverdue) / existing.count);
+              clientMap.set(item.clientName, existing);
+            }
+            const clientBreakdown = Array.from(clientMap.entries())
+              .map(([name, data]) => ({ name, ...data }))
+              .sort((a, b) => b.balance - a.balance);
+
+            // Waterfall chart data
+            const bucketData = [
+              { name: "Current", value: aging.buckets.current, color: "#22C55E" },
+              { name: "1-30d", value: aging.buckets.d1_30, color: "#F59E0B" },
+              { name: "31-60d", value: aging.buckets.d31_60, color: "#F97316" },
+              { name: "61-90d", value: aging.buckets.d61_90, color: "#EF4444" },
+              { name: "90+d", value: aging.buckets.d90_plus, color: "#DC2626" },
+            ];
+
+            return (
+              <>
+                {/* Summary KPIs */}
+                <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+                  <div className="kpi-card amber">
+                    <div className="kpi-label">Total Outstanding</div>
+                    <div className="kpi-value" style={{ fontSize: 22 }}>{fmt(aging.totalOutstanding)}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{aging.invoiceCount} invoices</div>
                   </div>
-                ))}
-              </div>
-
-              <div style={{
-                padding: "16px 20px", marginBottom: 16, background: "var(--bg-card)",
-                borderRadius: 10, border: "1px solid var(--border-color)",
-                display: "flex", justifyContent: "space-between",
-              }}>
-                <span style={{ fontSize: 14 }}><strong>{aging.invoiceCount}</strong> outstanding invoices</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: "#F59E0B" }}>Total: {fmt(aging.totalOutstanding)}</span>
-              </div>
-
-              {aging.items.length > 0 && (
-                <div className="table-container">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Invoice</th>
-                        <th>Client</th>
-                        <th>Due Date</th>
-                        <th style={{ textAlign: "right" }}>Total</th>
-                        <th style={{ textAlign: "right" }}>Paid</th>
-                        <th style={{ textAlign: "right" }}>Balance</th>
-                        <th style={{ textAlign: "center" }}>Days Overdue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {aging.items.map((item) => (
-                        <tr key={item.id}>
-                          <td style={{ fontWeight: 600 }}>{item.invoiceNumber}</td>
-                          <td>{item.clientName}</td>
-                          <td>{new Date(item.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
-                          <td style={{ textAlign: "right" }}>{fmt(item.total)}</td>
-                          <td style={{ textAlign: "right", color: "var(--accent-green)" }}>{fmt(item.paid)}</td>
-                          <td style={{ textAlign: "right", fontWeight: 700 }}>{fmt(item.balance)}</td>
-                          <td style={{ textAlign: "center" }}>
-                            <span style={{
-                              padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 600,
-                              background: item.daysOverdue === 0 ? "rgba(34,197,94,0.15)" :
-                                item.daysOverdue <= 30 ? "rgba(245,158,11,0.15)" :
-                                  item.daysOverdue <= 60 ? "rgba(249,115,22,0.15)" : "rgba(239,68,68,0.15)",
-                              color: item.daysOverdue === 0 ? "#22C55E" :
-                                item.daysOverdue <= 30 ? "#F59E0B" :
-                                  item.daysOverdue <= 60 ? "#F97316" : "#EF4444",
-                            }}>
-                              {item.daysOverdue === 0 ? "Current" : `${item.daysOverdue}d`}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="kpi-card" style={{ borderColor: "rgba(99, 102, 241, 0.2)" }}>
+                    <div className="kpi-label">Days Sales Outstanding</div>
+                    <div className="kpi-value" style={{ fontSize: 22, color: dso > 45 ? "#EF4444" : dso > 30 ? "#F59E0B" : "#22C55E" }}>{dso}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>weighted avg days</div>
+                  </div>
+                  <div className="kpi-card" style={{ borderColor: "rgba(239, 68, 68, 0.2)" }}>
+                    <div className="kpi-label">At-Risk (61+ days)</div>
+                    <div className="kpi-value" style={{ fontSize: 22, color: atRisk > 0 ? "#EF4444" : "#22C55E" }}>{fmt(atRisk)}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                      {aging.totalOutstanding > 0 ? Math.round((atRisk / aging.totalOutstanding) * 100) : 0}% of total
+                    </div>
+                  </div>
+                  <div className="kpi-card green">
+                    <div className="kpi-label">Collection Rate</div>
+                    <div className="kpi-value" style={{ fontSize: 22 }}>
+                      {aging.totalOutstanding > 0 ? Math.round(((aging.buckets.current) / aging.totalOutstanding) * 100) : 100}%
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>current vs outstanding</div>
+                  </div>
                 </div>
-              )}
-            </>
-          )}
+
+                {/* Aging Waterfall Chart */}
+                <div className="chart-container" style={{ marginBottom: 24 }}>
+                  <div className="chart-header"><h3>Aging Distribution</h3></div>
+                  <div style={{ width: "100%", height: 240 }}>
+                    <ChartAccessibilityWrapper label="Accounts receivable aging distribution" data={bucketData} dataKeys={["name", "value"]}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={bucketData} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="name" tick={{ fontSize: 12, fill: "var(--text-secondary)" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: "var(--text-secondary)" }} tickFormatter={fmtShort} axisLine={false} tickLine={false} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Bar dataKey="value" name="Outstanding" radius={[6, 6, 0, 0]} barSize={40}>
+                          {bucketData.map((entry, i) => (
+                            <Cell key={i} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    </ChartAccessibilityWrapper>
+                  </div>
+                </div>
+
+                <div className="section-grid" style={{ marginBottom: 24 }}>
+                  {/* Per-Client Breakdown */}
+                  <div className="table-container">
+                    <div className="table-header"><h3>Slow Payers (By Client)</h3></div>
+                    {clientBreakdown.length > 0 ? (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th scope="col">Client</th>
+                            <th scope="col" style={{ textAlign: "center" }}>Invoices</th>
+                            <th scope="col" style={{ textAlign: "center" }}>Avg Days</th>
+                            <th scope="col" style={{ textAlign: "right" }}>Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {clientBreakdown.slice(0, 8).map((c) => (
+                            <tr key={c.name}>
+                              <td style={{ fontWeight: 600 }}>{c.name}</td>
+                              <td style={{ textAlign: "center" }}>{c.count}</td>
+                              <td style={{ textAlign: "center" }}>
+                                <span style={{
+                                  padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 600,
+                                  background: c.avgDays <= 30 ? "rgba(34,197,94,0.15)" : c.avgDays <= 60 ? "rgba(245,158,11,0.15)" : "rgba(239,68,68,0.15)",
+                                  color: c.avgDays <= 30 ? "#22C55E" : c.avgDays <= 60 ? "#F59E0B" : "#EF4444",
+                                }}>
+                                  {c.avgDays}d
+                                </span>
+                              </td>
+                              <td style={{ textAlign: "right", fontWeight: 700 }}>{fmt(c.balance)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>No client data</div>
+                    )}
+                  </div>
+
+                  {/* Bucket cards */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {bucketData.map((b) => {
+                      const pct = aging.totalOutstanding > 0 ? Math.round((b.value / aging.totalOutstanding) * 100) : 0;
+                      return (
+                        <div key={b.name} style={{
+                          padding: "14px 16px", borderRadius: 10,
+                          background: b.value > 0 ? `${b.color}10` : "var(--bg-card)",
+                          border: `1px solid ${b.value > 0 ? `${b.color}30` : "var(--border-color)"}`,
+                          display: "flex", justifyContent: "space-between", alignItems: "center",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: b.color }} />
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{b.name}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{pct}%</span>
+                            <span style={{ fontSize: 15, fontWeight: 800, color: b.value > 0 ? "var(--text-primary)" : "var(--text-muted)" }}>
+                              {b.value > 0 ? fmt(b.value) : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Detailed invoice table */}
+                {aging.items.length > 0 && (
+                  <div className="table-container">
+                    <div className="table-header"><h3>Invoice Details</h3></div>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th scope="col">Invoice</th>
+                          <th scope="col">Client</th>
+                          <th scope="col">Due Date</th>
+                          <th scope="col" style={{ textAlign: "right" }}>Total</th>
+                          <th scope="col" style={{ textAlign: "right" }}>Paid</th>
+                          <th scope="col" style={{ textAlign: "right" }}>Balance</th>
+                          <th scope="col" style={{ textAlign: "center" }}>Days Overdue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aging.items.map((item) => (
+                          <tr key={item.id}>
+                            <td style={{ fontWeight: 600 }}>{item.invoiceNumber}</td>
+                            <td>{item.clientName}</td>
+                            <td>{new Date(item.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
+                            <td style={{ textAlign: "right" }}>{fmt(item.total)}</td>
+                            <td style={{ textAlign: "right", color: "var(--accent-green)" }}>{fmt(item.paid)}</td>
+                            <td style={{ textAlign: "right", fontWeight: 700 }}>{fmt(item.balance)}</td>
+                            <td style={{ textAlign: "center" }}>
+                              <span style={{
+                                padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 600,
+                                background: item.daysOverdue === 0 ? "rgba(34,197,94,0.15)" :
+                                  item.daysOverdue <= 30 ? "rgba(245,158,11,0.15)" :
+                                    item.daysOverdue <= 60 ? "rgba(249,115,22,0.15)" : "rgba(239,68,68,0.15)",
+                                color: item.daysOverdue === 0 ? "#22C55E" :
+                                  item.daysOverdue <= 30 ? "#F59E0B" :
+                                    item.daysOverdue <= 60 ? "#F97316" : "#EF4444",
+                              }}>
+                                {item.daysOverdue === 0 ? "Current" : `${item.daysOverdue}d`}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
 
@@ -586,23 +742,23 @@ export default function ReportsPage() {
         <div className="table-container" style={{ padding: 24 }}>
           <h3 style={{ marginBottom: 16 }}>Period Comparison</h3>
           {comparison ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
+            <div className="responsive-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
               <div className="kpi-card">
                 <div className="kpi-label">Revenue Change</div>
-                <div className="kpi-value" style={{ fontSize: 18, color: (comparison.revenueChange || 0) >= 0 ? "#22C55E" : "#EF4444" }}>
-                  {(comparison.revenueChange || 0) >= 0 ? "+" : ""}{comparison.revenueChange || 0}%
+                <div className="kpi-value" style={{ fontSize: 18, color: (comparison.changes.revenue || 0) >= 0 ? "#22C55E" : "#EF4444" }}>
+                  {(comparison.changes.revenue || 0) >= 0 ? "+" : ""}{comparison.changes.revenue || 0}%
                 </div>
               </div>
               <div className="kpi-card">
                 <div className="kpi-label">Expense Change</div>
-                <div className="kpi-value" style={{ fontSize: 18, color: (comparison.expenseChange || 0) <= 0 ? "#22C55E" : "#EF4444" }}>
-                  {(comparison.expenseChange || 0) >= 0 ? "+" : ""}{comparison.expenseChange || 0}%
+                <div className="kpi-value" style={{ fontSize: 18, color: (comparison.changes.expenses || 0) <= 0 ? "#22C55E" : "#EF4444" }}>
+                  {(comparison.changes.expenses || 0) >= 0 ? "+" : ""}{comparison.changes.expenses || 0}%
                 </div>
               </div>
               <div className="kpi-card">
                 <div className="kpi-label">Profit Change</div>
-                <div className="kpi-value" style={{ fontSize: 18, color: (comparison.profitChange || 0) >= 0 ? "#22C55E" : "#EF4444" }}>
-                  {(comparison.profitChange || 0) >= 0 ? "+" : ""}{comparison.profitChange || 0}%
+                <div className="kpi-value" style={{ fontSize: 18, color: (comparison.changes.profit || 0) >= 0 ? "#22C55E" : "#EF4444" }}>
+                  {(comparison.changes.profit || 0) >= 0 ? "+" : ""}{comparison.changes.profit || 0}%
                 </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+
 import {
   Plus,
   X,
@@ -12,9 +13,17 @@ import {
   MoreVertical,
   Trash2,
   Eye,
-  RefreshCw,
+
+  Sparkles,
+  Check,
+  EyeOff,
 } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm-dialog";
+import { DetailDrawer } from "@/components/detail-drawer";
+import { DateRangeFilter } from "@/components/date-range-filter";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface Vendor {
   id: string;
@@ -30,16 +39,38 @@ interface Vendor {
   expenseCount: number;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+interface DetectedVendor {
+  name: string;
+  avgAmount: number;
+  totalAmount: number;
+  count: number;
+  distinctMonths: number;
+  frequency: string;
+}
+
+import { formatCurrency } from "@/lib/currency";
+const fmt = (n: number) => formatCurrency(n);
 
 export default function VendorsPage() {
   const { toast } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [_expandedId] = useState<string | null>(null);
+
+  // Detail drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerData, setDrawerData] = useState<{
+    vendorId: string; title: string; subtitle?: string; totalAmount: number; txnCount: number;
+    monthlyData: { month: string; amount: number }[];
+    categoryData: { name: string; value: number }[];
+    transactions: { date: string; description: string; amount: number; category?: string; categoryColor?: string }[];
+  } | null>(null);
+
+  // Date range
+  const [dateRange, setDateRange] = useState({ from: "", to: "", label: "All Time" });
 
   // Form fields
   const [name, setName] = useState("");
@@ -50,10 +81,18 @@ export default function VendorsPage() {
   const [panNumber, setPanNumber] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("30");
 
+  // Suggestions from bank data
+  const [suggestions, setSuggestions] = useState<DetectedVendor[]>([]);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
   async function loadVendors() {
     setLoading(true);
     try {
-      const res = await fetch("/api/vendors");
+      const params = new URLSearchParams();
+      if (dateRange.from) params.set("from", dateRange.from);
+      if (dateRange.to) params.set("to", dateRange.to);
+      const qs = params.toString();
+      const res = await fetch(`/api/vendors${qs ? `?${qs}` : ""}`);
       const data = await res.json();
       setVendors(data.vendors || []);
     } catch (err) {
@@ -63,7 +102,40 @@ export default function VendorsPage() {
     }
   }
 
-  useEffect(() => { loadVendors(); }, []);
+  useEffect(() => { loadVendors(); }, [dateRange]);
+
+  // Load suggestions + dismissed
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("dismissed_vendors");
+      if (stored) setDismissed(new Set(JSON.parse(stored)));
+    } catch { /* ignore */ }
+    fetch("/api/detect-recurring").then(r => r.json()).then(data => {
+      setSuggestions(data.vendors || []);
+    }).catch(console.error);
+  }, [vendors]);
+
+  async function acceptVendor(s: DetectedVendor) {
+    try {
+      const res = await fetch("/api/vendors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: s.name }),
+      });
+      if (!res.ok) { toast("Failed to add", "error"); return; }
+      toast(`"${s.name}" added as vendor`, "success");
+      loadVendors();
+    } catch { toast("Failed", "error"); }
+  }
+
+  function dismissVendor(name: string) {
+    const next = new Set(dismissed);
+    next.add(name);
+    setDismissed(next);
+    try { localStorage.setItem("dismissed_vendors", JSON.stringify([...next])); } catch { /* ignore */ }
+  }
+
+  const visibleSuggestions = suggestions.filter(s => !dismissed.has(s.name));
 
   async function createVendor() {
     if (!name.trim()) return;
@@ -94,7 +166,8 @@ export default function VendorsPage() {
   }
 
   async function deleteVendor(id: string, vendorName: string) {
-    if (!confirm(`Delete vendor "${vendorName}"?`)) return;
+    const ok = await confirm({ title: "Delete Vendor?", message: `Are you sure you want to delete "${vendorName}"?`, confirmLabel: "Delete", destructive: true });
+    if (!ok) return;
     try {
       await fetch(`/api/vendors?id=${id}`, { method: "DELETE" });
       toast("Vendor deleted", "success");
@@ -113,20 +186,34 @@ export default function VendorsPage() {
 
   const totalSpending = vendors.reduce((sum, v) => sum + v.totalSpent, 0);
 
+  async function openVendorDetail(v: Vendor) {
+    try {
+      const res = await fetch(`/api/vendors/${v.id}`);
+      const data = await res.json();
+      setDrawerData({
+        vendorId: v.id,
+        title: v.name,
+        subtitle: v.company || undefined,
+        totalAmount: data.totalSpent || 0,
+        txnCount: data.txnCount || 0,
+        monthlyData: data.monthlySpend || [],
+        categoryData: data.categoryBreakdown || [],
+        transactions: data.transactions || [],
+      });
+      setDrawerOpen(true);
+    } catch (err) {
+      console.error(err);
+      toast("Failed to load vendor details", "error");
+    }
+  }
+
   return (
     <div>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Building2 size={24} /> Vendors
-          </h2>
-          <p>Manage suppliers and track spending</p>
-        </div>
+      <PageHeader title="Vendors" description="Manage suppliers and track spending">
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
           <Plus size={16} /> Add Vendor
         </button>
-      </div>
-
+      </PageHeader>
       {/* Create Form */}
       {showForm && (
         <div style={{
@@ -135,11 +222,11 @@ export default function VendorsPage() {
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
             <h3 style={{ margin: 0 }}>New Vendor</h3>
-            <button style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer" }} onClick={() => setShowForm(false)}>
-              <X size={18} />
+            <button aria-label="Close vendor form" style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer" }} onClick={() => setShowForm(false)}>
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="section-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <label style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4, display: "block" }}>Name *</label>
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Vendor name" />
@@ -175,7 +262,61 @@ export default function VendorsPage() {
         </div>
       )}
 
+      {/* Suggestions from Bank Data */}
+      {visibleSuggestions.length > 0 && (
+        <div style={{
+          marginBottom: 24, padding: 20, background: "linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))",
+          borderRadius: 12, border: "1px solid rgba(99,102,241,0.2)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <Sparkles size={18} color="#818CF8" />
+            <h3 style={{ margin: 0, fontSize: 15 }}>Detected Vendors from Bank</h3>
+            <span style={{ fontSize: 11, color: "var(--text-secondary)", background: "rgba(99,102,241,0.15)", padding: "2px 8px", borderRadius: 10 }}>
+              {visibleSuggestions.length} found
+            </span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+            {visibleSuggestions.slice(0, 24).map(s => (
+              <div key={s.name} style={{
+                padding: 14, background: "var(--bg-card)", borderRadius: 10,
+                border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 8,
+              }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--text-secondary)" }}>
+                  <span>Total: {fmt(s.totalAmount)}</span>
+                  <span>{s.count} txns</span>
+                  <span>{s.distinctMonths} months</span>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                  <button
+                    onClick={() => acceptVendor(s)}
+                    style={{
+                      flex: 1, padding: "6px 10px", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 600,
+                      background: "rgba(34,197,94,0.15)", color: "#22C55E", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                    }}
+                  >
+                    <Check size={12} /> Accept
+                  </button>
+                  <button
+                    onClick={() => dismissVendor(s.name)}
+                    style={{
+                      padding: "6px 8px", borderRadius: 6, border: "none", fontSize: 11,
+                      background: "rgba(239,68,68,0.1)", color: "#EF4444", cursor: "pointer",
+                    }}
+                  >
+                    <EyeOff size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* KPIs */}
+
+      {/* Date Filter */}
+      <DateRangeFilter onChange={setDateRange} />
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 24 }}>
         <div className="kpi-card">
           <div className="kpi-label">Total Vendors</div>
@@ -207,16 +348,12 @@ export default function VendorsPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: 40, color: "var(--text-secondary)" }}>Loading vendors...</div>
       ) : filtered.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: 60, background: "var(--bg-card)",
-          borderRadius: 16, border: "1px solid var(--border-color)",
-        }}>
-          <Building2 size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <h3 style={{ margin: "0 0 8px" }}>{vendors.length === 0 ? "No vendors yet" : "No matches"}</h3>
-          <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-            {vendors.length === 0 ? "Add your first vendor to start tracking spending" : "Try a different search term"}
-          </p>
-        </div>
+        <EmptyState
+          icon={Building2}
+          title={vendors.length === 0 ? "No vendors yet" : "No matches"}
+          description={vendors.length === 0 ? "Add your first vendor to start tracking spending" : "Try a different search term"}
+          action={vendors.length === 0 ? <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={16} /> Add Vendor</button> : undefined}
+        />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16 }}>
           {filtered.map((v) => (
@@ -227,7 +364,7 @@ export default function VendorsPage() {
                 border: "1px solid var(--border-color)", transition: "border-color 0.2s",
                 cursor: "pointer",
               }}
-              onClick={() => setExpandedId(expandedId === v.id ? null : v.id)}
+              onClick={() => openVendorDetail(v)}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
@@ -235,11 +372,12 @@ export default function VendorsPage() {
                   {v.company && <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)" }}>{v.company}</p>}
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button
+                    <button
                     onClick={(e) => { e.stopPropagation(); deleteVendor(v.id, v.name); }}
+                    aria-label={`Delete vendor ${v.name}`}
                     style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: 4 }}
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={14} aria-hidden="true" />
                   </button>
                   <MoreVertical size={14} style={{ color: "var(--text-tertiary)" }} />
                 </div>
@@ -260,7 +398,7 @@ export default function VendorsPage() {
                 </div>
               </div>
 
-              {expandedId === v.id && (
+              {_expandedId === v.id && (
                 <div style={{ marginTop: 16, padding: "12px 0 0", borderTop: "1px solid var(--border-color)", fontSize: 12 }}>
                   {v.email && <p style={{ margin: "0 0 4px", display: "flex", alignItems: "center", gap: 6 }}><Mail size={12} /> {v.email}</p>}
                   {v.phone && <p style={{ margin: "0 0 4px", display: "flex", alignItems: "center", gap: 6 }}><Phone size={12} /> {v.phone}</p>}
@@ -271,6 +409,24 @@ export default function VendorsPage() {
             </div>
           ))}
         </div>
+      )}
+      {confirmDialog}
+
+      {/* Detail Drawer */}
+      {drawerData && (
+        <DetailDrawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          title={drawerData.title}
+          subtitle={drawerData.subtitle}
+          totalAmount={drawerData.totalAmount}
+          totalLabel="Total Spent"
+          txnCount={drawerData.txnCount}
+          monthlyData={drawerData.monthlyData}
+          categoryData={drawerData.categoryData}
+          transactions={drawerData.transactions}
+          detailUrl={`/vendors/${drawerData.vendorId}`}
+        />
       )}
     </div>
   );

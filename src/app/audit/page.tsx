@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Shield, RefreshCw, Search, User, Clock } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 interface AuditEntry {
   id: string;
@@ -41,15 +42,11 @@ export default function AuditPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between" }}>
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}><Shield size={24} /> Audit Log</h2>
-          <p>Complete activity trail for compliance and security</p>
-        </div>
+      <PageHeader title="Audit Log" description="Complete activity trail for compliance and security">
         <button className="btn btn-secondary" onClick={() => window.location.reload()} style={{ fontSize: 12, padding: "6px 14px" }}>
           <RefreshCw size={14} /> Refresh
         </button>
-      </div>
+      </PageHeader>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <div style={{ position: "relative", flex: 1 }}>
@@ -73,11 +70,11 @@ export default function AuditPage() {
           <table>
             <thead>
               <tr>
-                <th>Timestamp</th>
-                <th>Action</th>
-                <th>Entity</th>
-                <th>Details</th>
-                <th>User</th>
+                <th scope="col">Timestamp</th>
+                <th scope="col">Action</th>
+                <th scope="col">Entity</th>
+                <th scope="col">Details</th>
+                <th scope="col">User</th>
               </tr>
             </thead>
             <tbody>

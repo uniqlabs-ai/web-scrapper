@@ -6,6 +6,8 @@ import {
   Mail, Clock, FileText, CreditCard, Activity, X
 } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface TeamUser {
   id: string;
@@ -108,6 +110,7 @@ export default function TeamPage() {
   };
 
   const timeAgo = (date: string) => {
+    // eslint-disable-next-line react-hooks/purity
     const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
     if (seconds < 60) return "just now";
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
@@ -116,44 +119,44 @@ export default function TeamPage() {
   };
 
   return (
-    <div style={{ padding: "32px 40px", maxWidth: 1200 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
-            <Users size={28} /> Team Management
-          </h1>
-          <p style={{ color: "#9CA3AF", marginTop: 4 }}>
-            Manage team members, assign roles, and view activity
-          </p>
-        </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          style={{
-            display: "flex", alignItems: "center", gap: 8,
-            backgroundColor: "#6366F1", color: "white", border: "none",
-            padding: "10px 20px", borderRadius: 8, cursor: "pointer",
-            fontWeight: 600, fontSize: 14,
-          }}
-        >
+    <div>
+      <PageHeader title="Team Management" description="Manage team members, assign roles, and view activity">
+        <button className="btn btn-primary" onClick={() => setShowInvite(true)}>
           <UserPlus size={16} /> Invite Member
         </button>
-      </div>
+      </PageHeader>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 24, backgroundColor: "#111827", borderRadius: 8, padding: 4, width: "fit-content" }}>
+      <div style={{
+        display: "flex", gap: 6, marginBottom: 24,
+        background: "var(--bg-secondary)", padding: 6, borderRadius: 12,
+        width: "fit-content",
+      }}>
         {(["members", "activity"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             style={{
-              padding: "8px 20px", borderRadius: 6, border: "none", cursor: "pointer",
-              fontWeight: 600, fontSize: 14,
-              backgroundColor: tab === t ? "#6366F1" : "transparent",
-              color: tab === t ? "white" : "#9CA3AF",
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "12px 20px", borderRadius: 10, border: "none",
+              fontSize: 14, fontWeight: 600, cursor: "pointer",
+              transition: "all 0.2s", whiteSpace: "nowrap",
+              background: tab === t ? "var(--bg-card)" : "transparent",
+              color: tab === t ? "var(--text-primary)" : "var(--text-secondary)",
+              boxShadow: tab === t ? "0 2px 8px rgba(0,0,0,0.25)" : "none",
             }}
           >
+            <span style={{ color: tab === t ? "var(--brand-primary)" : "var(--text-secondary)", display: "flex" }}>
+              {t === "members" ? <Users size={18} /> : <Activity size={18} />}
+            </span>
             {t === "members" ? "Members" : "Activity Feed"}
+            {t === "members" && (
+              <span style={{
+                fontSize: 11, padding: "1px 7px", borderRadius: 8, fontWeight: 700,
+                background: tab === t ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.06)",
+                color: tab === t ? "var(--brand-primary)" : "var(--text-secondary)",
+              }}>{users.length}</span>
+            )}
           </button>
         ))}
       </div>
@@ -164,13 +167,14 @@ export default function TeamPage() {
           position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)",
           display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50,
         }}>
-          <div style={{
+          <div className="responsive-modal" role="dialog" aria-label="Invite team member" style={{
             backgroundColor: "#1F2937", borderRadius: 12, padding: 32,
             width: 440, position: "relative",
           }}>
             <button
               onClick={() => setShowInvite(false)}
               style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#9CA3AF", cursor: "pointer" }}
+              aria-label="Close invite dialog"
             >
               <X size={20} />
             </button>
@@ -204,7 +208,7 @@ export default function TeamPage() {
               </div>
               <div>
                 <label style={{ fontSize: 13, color: "#9CA3AF", marginBottom: 6, display: "block" }}>Role</label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="section-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {Object.entries(ROLE_CONFIG).map(([key, config]) => {
                     const Icon = config.icon;
                     return (
@@ -315,13 +319,11 @@ export default function TeamPage() {
       {tab === "activity" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {activities.length === 0 ? (
-            <div style={{
-              textAlign: "center", padding: 80, backgroundColor: "#111827",
-              borderRadius: 12, border: "1px solid #1F2937",
-            }}>
-              <Activity size={48} style={{ color: "#374151", margin: "0 auto 16px" }} />
-              <p style={{ color: "#9CA3AF", fontSize: 16 }}>No activity yet</p>
-            </div>
+            <EmptyState
+              icon={Activity}
+              title="No activity yet"
+              description="Team activity will appear here as members interact with the platform"
+            />
           ) : (
             activities.map((activity) => {
               const ActionIcon = ACTION_ICONS[activity.action] || Activity;
