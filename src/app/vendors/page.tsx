@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 
 import {
@@ -96,7 +98,7 @@ export default function VendorsPage() {
       const data = await res.json();
       setVendors(data.vendors || []);
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to load vendors", "vendors", "load", err);
     } finally {
       setLoading(false);
     }
@@ -112,7 +114,7 @@ export default function VendorsPage() {
     } catch { /* ignore */ }
     fetch("/api/detect-recurring").then(r => r.json()).then(data => {
       setSuggestions(data.vendors || []);
-    }).catch(console.error);
+    }).catch((err: unknown) => clientLog.error("Failed to load fingerprints", "vendors", "fingerprints", err));
   }, [vendors]);
 
   async function acceptVendor(s: DetectedVendor) {
@@ -160,7 +162,7 @@ export default function VendorsPage() {
       setGstNumber(""); setPanNumber(""); setPaymentTerms("30");
       loadVendors();
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to create vendor", "vendors", "create", err);
       toast("Failed to create vendor", "error");
     }
   }
@@ -173,7 +175,7 @@ export default function VendorsPage() {
       toast("Vendor deleted", "success");
       loadVendors();
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to delete vendor", "vendors", "delete", err);
     }
   }
 
@@ -202,7 +204,7 @@ export default function VendorsPage() {
       });
       setDrawerOpen(true);
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to apply fingerprint", "vendors", "apply-fingerprint", err);
       toast("Failed to load vendor details", "error");
     }
   }

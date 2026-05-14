@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DateRangeFilter } from "@/components/date-range-filter";
@@ -103,7 +105,7 @@ export default function RecurringPage() {
       setItems(recRes.recurringExpenses || []);
       setCategories(catRes.categories || catRes || []);
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to load recurring expenses", "recurring", "load", err);
     } finally {
       setLoading(false);
     }
@@ -123,7 +125,7 @@ export default function RecurringPage() {
   useEffect(() => {
     fetch("/api/detect-recurring").then(r => r.json()).then(data => {
       setSuggestions(data.subscriptions || []);
-    }).catch(console.error);
+    }).catch((err: unknown) => clientLog.error("Failed to detect recurring patterns", "recurring", "detect", err));
   }, [items]);
 
   async function create() {
@@ -149,7 +151,7 @@ export default function RecurringPage() {
       setDesc(""); setAmount(""); setFrequency("monthly"); setVendor(""); setCategoryId("");
       load();
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to create recurring expense", "recurring", "create", err);
       toast("Failed to create", "error");
     }
   }
@@ -160,7 +162,7 @@ export default function RecurringPage() {
       toast("Recurring expense paused", "success");
       load();
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to pause recurring expense", "recurring", "pause", err);
     }
   }
 
@@ -174,7 +176,7 @@ export default function RecurringPage() {
       toast("Recurring expense resumed", "success");
       load();
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to delete recurring expense", "recurring", "delete", err);
     }
   }
 
@@ -207,7 +209,7 @@ export default function RecurringPage() {
       toast(`${data.processed} expenses created`, "success");
       load();
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to accept suggestion", "recurring", "accept", err);
       toast("Failed to process", "error");
     } finally {
       setProcessing(false);

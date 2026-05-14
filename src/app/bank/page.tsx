@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Upload,
@@ -663,7 +665,7 @@ export default function BankPage() {
         setSummary(data.summary || { totalDebit: 0, totalCredit: 0, transactionCount: 0 });
         setPagination(data.pagination || { page: 1, limit: 50, total: 0, totalPages: 0 });
       } catch (err) {
-        console.error("Failed to fetch transactions:", err);
+        clientLog.error("Failed to fetch transactions", "bank", "load-txns", err);
       } finally {
         setLoading(false);
       }
@@ -701,7 +703,7 @@ export default function BankPage() {
       fetchTransactions();
       fetchAccounts();
     } catch (err) {
-      console.error("Upload error:", err);
+      clientLog.error("Failed to upload statement", "bank", "upload", err);
       toast("Failed to upload file", "error");
     } finally {
       setUploading(false);

@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import {
   BarChart3,
@@ -148,7 +150,7 @@ export default function ReportsPage() {
   useEffect(() => {
     if (tab === "comparison") {
       fetch(`/api/reports/comparison?period=month&from=${fromDate}&to=${toDate}`)
-        .then((r) => r.json()).then(setComparison).catch(console.error);
+        .then((r) => r.json()).then(setComparison).catch((err: unknown) => clientLog.error("Failed to load comparison", "reports", "comparison", err));
     }
   }, [tab, fromDate, toDate]);
 

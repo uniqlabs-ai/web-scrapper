@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import { ArrowRightLeft, RefreshCw } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
@@ -32,7 +34,7 @@ export default function FxPage() {
       setConverted(data.converted);
       setRate(data.rate);
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to load FX rates", "fx", "load", err);
     } finally {
       setLoading(false);
     }

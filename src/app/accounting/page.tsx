@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import { BookOpen } from "lucide-react";
 import { useToast } from "@/components/toast";
@@ -55,7 +57,7 @@ export default function AccountingPage() {
         const data = await res.json();
         setAccounts(data.accounts || []);
       }
-    } catch (err) { console.error(err); }
+    } catch (err) { clientLog.error("Failed to load accounting data", "accounting", "load", err); }
     finally { setLoading(false); }
   }
 

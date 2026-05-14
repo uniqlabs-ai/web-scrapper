@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import { TrendingUp, ArrowUpRight, ArrowDownRight, Plus, X, Zap, Eye } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, ReferenceLine } from "recharts";
@@ -61,7 +63,7 @@ export default function ForecastPage() {
       setForecast(data.forecast || []);
       setScenarios(data.scenarios || {});
       setMetrics(data.metrics || null);
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch((err: unknown) => clientLog.error("Failed to load forecast", "forecast", "load", err)).finally(() => setLoading(false));
   }, []);
 
   // 30/60/90 outlook state

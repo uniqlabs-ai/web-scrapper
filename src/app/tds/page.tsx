@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import { Receipt, Calendar, Building2, CheckCircle2, Download } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -45,7 +47,7 @@ export default function TDSPage() {
       setData(d);
       if (!q) setSelectedQ(d.currentQuarter?.quarter || "Q1");
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to load TDS data", "tds", "load", err);
     } finally {
       setLoading(false);
     }

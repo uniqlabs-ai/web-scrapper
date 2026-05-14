@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import {
   GitMerge,
@@ -10,8 +12,13 @@ import {
   ArrowRight,
   RefreshCw,
   Link2,
+  Eye,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { DateRangeFilter } from "@/components/date-range-filter";
+import { PageHeader } from "@/components/page-header";
 
 interface Suggestion {
   type: string;
@@ -33,49 +40,79 @@ interface UnmatchedTxn {
   bestMatch: Suggestion | null;
 }
 
+interface PendingMatch {
+  transactionId: string;
+  transactionDesc: string;
+  transactionAmount: number;
+  transactionDate: string;
+  transactionType: string;
+  matchType: string;
+  matchId: string;
+  matchDesc: string;
+  matchAmount: number;
+  matchDate: string;
+  confidence: number;
+  suggestedCategory: string | null;
+}
+
 interface Summary {
   totalUnmatched: number;
   withSuggestions: number;
   autoMatchable: number;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+import { formatCurrency } from "@/lib/currency";
+const fmt = (n: number) => formatCurrency(n);
+
+const confColor = (c: number) =>
+  c >= 0.9 ? "#22C55E" : c >= 0.7 ? "#F59E0B" : "#6B7280";
+
+const confBg = (c: number) =>
+  c >= 0.9 ? "rgba(34,197,94,0.12)" : c >= 0.7 ? "rgba(245,158,11,0.12)" : "rgba(107,114,128,0.08)";
 
 export default function ReconciliationPage() {
   const { toast } = useToast();
   const [items, setItems] = useState<UnmatchedTxn[]>([]);
   const [summary, setSummary] = useState<Summary>({ totalUnmatched: 0, withSuggestions: 0, autoMatchable: 0 });
   const [loading, setLoading] = useState(true);
+  const [reconciling, setReconciling] = useState(false);
+  const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
+  const [showReview, setShowReview] = useState(false);
+  const [confirmingAll, setConfirmingAll] = useState(false);
+  const [dateRange, setDateRange] = useState({ from: "", to: "", label: "All Time" });
 
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/reconciliation");
+      const params = new URLSearchParams();
+      if (dateRange.from) params.set("from", dateRange.from);
+      if (dateRange.to) params.set("to", dateRange.to);
+      const qs = params.toString();
+      const res = await fetch(`/api/reconciliation${qs ? `?${qs}` : ""}`);
       const data = await res.json();
       setItems(data.unmatched || []);
       setSummary(data.summary || { totalUnmatched: 0, withSuggestions: 0, autoMatchable: 0 });
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to load unmatched transactions", "reconciliation", "load", err);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [dateRange]);
 
-  async function confirmMatch(txnId: string, matchType: string, matchId: string) {
+  async function confirmMatch(txnId: string, matchType: string, matchId: string, category?: string | null) {
     try {
       await fetch("/api/reconciliation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactionId: txnId, matchType, matchId }),
+        body: JSON.stringify({ transactionId: txnId, matchType, matchId, category }),
       });
       toast("Transaction reconciled", "success");
       setItems((prev) => prev.filter((i) => i.id !== txnId));
       setSummary((prev) => ({ ...prev, totalUnmatched: prev.totalUnmatched - 1 }));
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to confirm match", "reconciliation", "match", err);
       toast("Failed to reconcile", "error");
     }
   }
@@ -91,7 +128,7 @@ export default function ReconciliationPage() {
       setItems((prev) => prev.filter((i) => i.id !== txnId));
       setSummary((prev) => ({ ...prev, totalUnmatched: prev.totalUnmatched - 1 }));
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to dismiss transaction", "reconciliation", "dismiss", err);
     }
   }
 
@@ -116,16 +153,84 @@ export default function ReconciliationPage() {
     load();
   }
 
+  async function runAutoReconcile() {
+    setReconciling(true);
+    try {
+      const res = await fetch("/api/reconciliation/auto", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.pendingReview && data.pendingReview.length > 0) {
+          setPendingMatches(data.pendingReview);
+          setShowReview(true);
+          toast(`${data.pendingReview.length} matches ready for review`, "success");
+        } else {
+          toast("No matches found", "info");
+        }
+      } else {
+        toast(data.error || "Auto-reconciliation failed", "error");
+      }
+    } catch {
+      toast("Auto-reconciliation failed", "error");
+    }
+    setReconciling(false);
+  }
+
+  async function confirmPendingMatch(match: PendingMatch) {
+    try {
+      await fetch("/api/reconciliation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactionId: match.transactionId,
+          matchType: match.matchType,
+          matchId: match.matchId,
+          category: match.suggestedCategory,
+        }),
+      });
+      setPendingMatches((prev) => prev.filter((m) => m.transactionId !== match.transactionId));
+      toast("Match confirmed", "success");
+    } catch {
+      toast("Failed to confirm match", "error");
+    }
+  }
+
+  async function rejectPendingMatch(txnId: string) {
+    setPendingMatches((prev) => prev.filter((m) => m.transactionId !== txnId));
+    toast("Match rejected", "info");
+  }
+
+  async function confirmAllPending() {
+    setConfirmingAll(true);
+    let confirmed = 0;
+    for (const match of pendingMatches) {
+      try {
+        await fetch("/api/reconciliation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transactionId: match.transactionId,
+            matchType: match.matchType,
+            matchId: match.matchId,
+            category: match.suggestedCategory,
+          }),
+        });
+        confirmed++;
+      } catch { /* skip */ }
+    }
+    setPendingMatches([]);
+    setShowReview(false);
+    setConfirmingAll(false);
+    toast(`${confirmed} matches confirmed`, "success");
+    load();
+  }
+
   return (
     <div>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <GitMerge size={24} /> Reconciliation
-          </h2>
-          <p>Match bank transactions to expenses and invoices</p>
-        </div>
+      <PageHeader title="Reconciliation" description="Match bank transactions to expenses, invoices, and revenue">
         <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-secondary" onClick={runAutoReconcile} disabled={reconciling}>
+            <RefreshCw size={16} className={reconciling ? "spin" : ""} /> {reconciling ? "Analyzing..." : "AI Auto-Reconcile"}
+          </button>
           <button className="btn btn-secondary" onClick={load}>
             <RefreshCw size={16} /> Refresh
           </button>
@@ -135,10 +240,40 @@ export default function ReconciliationPage() {
             </button>
           )}
         </div>
-      </div>
+      </PageHeader>
+
+      <DateRangeFilter onChange={setDateRange} />
+
+      {/* Progress Bar */}
+      {(() => {
+        const total = summary.totalUnmatched + summary.autoMatchable;
+        const matchedPct = total > 0 ? Math.round(((total - summary.totalUnmatched + summary.autoMatchable) / Math.max(total, 1)) * 100) : 100;
+        const timeSaved = Math.round(summary.autoMatchable * 2.5); // ~2.5 min per manual match
+        return total > 0 ? (
+          <div style={{
+            padding: "14px 18px", marginBottom: 16, borderRadius: 12,
+            background: "var(--bg-card)", border: "1px solid var(--border-color)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Reconciliation Progress</span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                {summary.autoMatchable > 0 && `⏱ ~${timeSaved} min estimated savings`}
+              </span>
+            </div>
+            <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+              <div style={{
+                height: "100%", borderRadius: 3,
+                width: `${matchedPct}%`,
+                background: "linear-gradient(90deg, #6366F1, #22C55E)",
+                transition: "width 0.5s ease",
+              }} />
+            </div>
+          </div>
+        ) : null;
+      })()}
 
       {/* KPIs */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 24 }}>
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
         <div className="kpi-card" style={{ borderColor: summary.totalUnmatched > 0 ? "rgba(234,179,8,0.3)" : "rgba(34,197,94,0.2)" }}>
           <div className="kpi-label">Unmatched</div>
           <div className="kpi-value" style={{ fontSize: 28 }}>{summary.totalUnmatched}</div>
@@ -147,11 +282,146 @@ export default function ReconciliationPage() {
           <div className="kpi-label">With Suggestions</div>
           <div className="kpi-value" style={{ fontSize: 28 }}>{summary.withSuggestions}</div>
         </div>
-        <div className="kpi-card">
+        <div className="kpi-card" style={{ borderColor: "rgba(99,102,241,0.2)" }}>
           <div className="kpi-label">Auto-Matchable (90%+)</div>
           <div className="kpi-value" style={{ fontSize: 28, color: "#6366F1" }}>{summary.autoMatchable}</div>
         </div>
+        <div className="kpi-card" style={{ borderColor: "rgba(34,197,94,0.2)" }}>
+          <div className="kpi-label">Match Rate</div>
+          <div className="kpi-value" style={{ fontSize: 28, color: summary.totalUnmatched === 0 ? "#22C55E" : "var(--text-primary)" }}>
+            {summary.totalUnmatched === 0 ? "100%" : `${summary.withSuggestions > 0 ? Math.round((summary.withSuggestions / summary.totalUnmatched) * 100) : 0}%`}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>suggestions found</div>
+        </div>
       </div>
+
+      {/* ========== REVIEW PANEL ========== */}
+      {showReview && pendingMatches.length > 0 && (
+        <div style={{
+          marginBottom: 24, padding: 20, background: "var(--bg-card)",
+          borderRadius: 16, border: "2px solid rgba(139,92,246,0.3)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Eye size={20} style={{ color: "var(--accent-purple)" }} />
+              <h3 style={{ margin: 0 }}>Review Proposed Matches ({pendingMatches.length})</h3>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn btn-primary"
+                onClick={confirmAllPending}
+                disabled={confirmingAll}
+                style={{ fontSize: 13 }}
+              >
+                <ThumbsUp size={14} /> {confirmingAll ? "Confirming..." : `Confirm All (${pendingMatches.length})`}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setPendingMatches([]); setShowReview(false); }}
+                style={{ fontSize: 13 }}
+              >
+                <X size={14} /> Cancel
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingMatches.map((match) => (
+              <div
+                key={match.transactionId}
+                style={{
+                  display: "flex", alignItems: "center", gap: 16,
+                  padding: "12px 16px", borderRadius: 10,
+                  background: confBg(match.confidence),
+                  border: `1px solid ${confColor(match.confidence)}20`,
+                }}
+              >
+                {/* Transaction */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{match.transactionDesc}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                    {new Date(match.transactionDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    {" · "}
+                    <span style={{
+                      padding: "1px 5px", borderRadius: 3, fontSize: 9, fontWeight: 700,
+                      background: match.transactionType === "credit" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                      color: match.transactionType === "credit" ? "#22C55E" : "#F43F5E",
+                    }}>
+                      {match.transactionType === "credit" ? "IN" : "OUT"}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 14, minWidth: 100, textAlign: "right" }}>
+                  {fmt(match.transactionAmount)}
+                </div>
+
+                {/* Arrow */}
+                <ArrowRight size={16} style={{ color: confColor(match.confidence), flexShrink: 0 }} />
+
+                {/* Match */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{match.matchDesc}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{
+                      padding: "1px 5px", borderRadius: 3, fontSize: 9, fontWeight: 700,
+                      background: "rgba(99,102,241,0.15)", color: "#6366F1",
+                    }}>
+                      {match.matchType.toUpperCase()}
+                    </span>
+                    {match.suggestedCategory && (
+                      <span style={{
+                        padding: "1px 5px", borderRadius: 3, fontSize: 9, fontWeight: 600,
+                        background: "rgba(139,92,246,0.12)", color: "var(--accent-purple)",
+                      }}>
+                        {match.suggestedCategory}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontWeight: 600, fontSize: 14, minWidth: 100, textAlign: "right" }}>
+                  {fmt(match.matchAmount)}
+                </div>
+
+                {/* Confidence */}
+                <span style={{
+                  padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: confBg(match.confidence),
+                  color: confColor(match.confidence),
+                  minWidth: 40, textAlign: "center",
+                }}>
+                  {Math.round(match.confidence * 100)}%
+                </span>
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                  <button
+                    onClick={() => confirmPendingMatch(match)}
+                    title="Accept match"
+                    style={{
+                      padding: "6px 10px", borderRadius: 6, border: "none",
+                      background: "rgba(34,197,94,0.15)", color: "#22C55E",
+                      cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12,
+                    }}
+                  >
+                    <Check size={12} /> Accept
+                  </button>
+                  <button
+                    onClick={() => rejectPendingMatch(match.transactionId)}
+                    title="Reject match"
+                    style={{
+                      padding: "6px 10px", borderRadius: 6, border: "none",
+                      background: "rgba(239,68,68,0.1)", color: "#F43F5E",
+                      cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12,
+                    }}
+                  >
+                    <ThumbsDown size={12} /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Transaction List */}
       {loading ? (
@@ -223,8 +493,8 @@ export default function ReconciliationPage() {
                         </span>
                         <span style={{
                           padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600,
-                          background: match.confidence >= 0.9 ? "rgba(34,197,94,0.15)" : match.confidence >= 0.7 ? "rgba(234,179,8,0.15)" : "rgba(255,255,255,0.06)",
-                          color: match.confidence >= 0.9 ? "#22C55E" : match.confidence >= 0.7 ? "#F59E0B" : "var(--text-secondary)",
+                          background: confBg(match.confidence),
+                          color: confColor(match.confidence),
                         }}>
                           {Math.round(match.confidence * 100)}%
                         </span>

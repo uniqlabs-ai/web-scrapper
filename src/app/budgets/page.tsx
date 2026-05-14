@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import {
   Target,
@@ -22,6 +24,11 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { useConfirm } from "@/components/confirm-dialog";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { ChartTooltip } from "@/components/chart-tooltip";
+import { ChartAccessibilityWrapper } from "@/components/chart-a11y-wrapper";
 
 interface Budget {
   id: string;
@@ -41,33 +48,12 @@ interface BudgetSummary {
   utilizationPct: number;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+import { formatCurrency, formatCompact } from "@/lib/currency";
+const fmt = (n: number) => formatCurrency(n);
 
-const fmtShort = (n: number) => {
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(0)}K`;
-  return `₹${n}`;
-};
+const fmtShort = (n: number) => formatCompact(n);
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: "var(--bg-card)", border: "1px solid var(--border-color)",
-      borderRadius: 8, padding: "10px 14px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-    }}>
-      <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", marginBottom: 6 }}>{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.name} style={{ margin: 0, fontSize: 13, fontWeight: 600, color: p.color }}>
-          {p.name}: {fmt(p.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
+
 
 const CATEGORY_OPTIONS = [
   "Salaries", "Infrastructure", "Marketing", "Software", "Office",
@@ -76,6 +62,7 @@ const CATEGORY_OPTIONS = [
 ];
 
 export default function BudgetsPage() {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [summary, setSummary] = useState<BudgetSummary>({ totalBudget: 0, totalSpent: 0, variance: 0, utilizationPct: 0 });
   const [loading, setLoading] = useState(true);
@@ -91,7 +78,7 @@ export default function BudgetsPage() {
       setBudgets(data.budgets || []);
       setSummary(data.summary || { totalBudget: 0, totalSpent: 0, variance: 0, utilizationPct: 0 });
     } catch (err) {
-      console.error("Fetch budgets error:", err);
+      clientLog.error("Failed to load budgets", "budgets", "load", err);
     } finally {
       setLoading(false);
     }
@@ -112,17 +99,18 @@ export default function BudgetsPage() {
       setFormLimit("");
       fetchBudgets();
     } catch (err) {
-      console.error("Create budget error:", err);
+      clientLog.error("Failed to create budget", "budgets", "create", err);
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this budget?")) return;
+    const ok = await confirm({ title: "Delete Budget?", message: "Are you sure you want to delete this budget? This action cannot be undone.", confirmLabel: "Delete", destructive: true });
+    if (!ok) return;
     try {
       await fetch(`/api/budgets?id=${id}`, { method: "DELETE" });
       fetchBudgets();
     } catch (err) {
-      console.error("Delete budget error:", err);
+      clientLog.error("Failed to delete budget", "budgets", "delete", err);
     }
   }
 
@@ -137,17 +125,11 @@ export default function BudgetsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Target size={24} /> Budget & Forecast
-          </h2>
-          <p>Track spending against monthly budgets</p>
-        </div>
+      <PageHeader title="Budget & Forecast" description="Track spending against monthly budgets">
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
           <Plus size={16} /> Set Budget
         </button>
-      </div>
+      </PageHeader>
 
       {/* Create Form */}
       {showForm && (
@@ -211,6 +193,7 @@ export default function BudgetsPage() {
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Current month</span>
           </div>
           <div style={{ width: "100%", height: 280 }}>
+            <ChartAccessibilityWrapper label="Budget vs actual spending by category this month" data={chartData} dataKeys={["category", "Budget", "Actual"]}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -226,6 +209,7 @@ export default function BudgetsPage() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            </ChartAccessibilityWrapper>
           </div>
         </div>
       )}
@@ -236,16 +220,12 @@ export default function BudgetsPage() {
           Loading budgets...
         </div>
       ) : budgets.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: 60, background: "var(--bg-card)",
-          borderRadius: 16, border: "1px solid var(--border-color)",
-        }}>
-          <Target size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <h3 style={{ margin: "0 0 8px" }}>No budgets set</h3>
-          <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-            Click &quot;Set Budget&quot; to define monthly spending limits per category
-          </p>
-        </div>
+        <EmptyState
+          icon={Target}
+          title="No budgets set"
+          description="Click 'Set Budget' to define monthly spending limits per category"
+          action={<button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={16} /> Set Budget</button>}
+        />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
           {budgets.map((b) => (
@@ -310,6 +290,7 @@ export default function BudgetsPage() {
           ))}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

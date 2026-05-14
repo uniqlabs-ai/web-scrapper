@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 
 import { Users, Plus, X, Play, DollarSign, Sparkles, Check, EyeOff, UserCheck, Briefcase, PieChart as PieChartIcon, BarChart3, Send } from "lucide-react";
@@ -111,7 +113,7 @@ export default function PayrollPage() {
     } catch { /* ignore */ }
     fetch("/api/detect-recurring").then(r => r.json()).then(data => {
       setSuggestions(data.payroll || []);
-    }).catch(console.error);
+    }).catch((err: unknown) => clientLog.error("Failed to load payroll data", "payroll", "load", err));
   }, [employees]);
 
   async function addEmployee() {
@@ -215,7 +217,7 @@ export default function PayrollPage() {
       });
       setDrawerOpen(true);
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to save employee", "payroll", "save", err);
       toast("Failed to load employee details", "error");
     }
   }

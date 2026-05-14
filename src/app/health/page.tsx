@@ -1,7 +1,10 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
-import { Heart, TrendingUp, TrendingDown, Wallet, Receipt, AlertTriangle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
+import { Heart, TrendingUp, TrendingDown, Wallet, Receipt, AlertTriangle, CheckCircle2, RefreshCw, ArrowRight, BarChart3, Mail, Send } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 interface Financials {
   totalRevenue: number; totalExpenses: number; netProfit: number; profitMargin: number;
@@ -17,13 +20,14 @@ interface Recommendation {
   description: string; impact: string; action: string;
 }
 
-const fmt = (n: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+import { formatCurrency } from "@/lib/currency";
+const fmt = (n: number) => formatCurrency(n);
 
 const PRIORITY_STYLES: Record<string, { bg: string; border: string; color: string; label: string }> = {
-  critical: { bg: "rgba(239,68,68,0.06)", border: "rgba(239,68,68,0.25)", color: "#EF4444", label: "🔴 CRITICAL" },
-  high: { bg: "rgba(245,158,11,0.06)", border: "rgba(245,158,11,0.25)", color: "#F59E0B", label: "🟡 HIGH" },
-  medium: { bg: "rgba(99,102,241,0.06)", border: "rgba(99,102,241,0.2)", color: "#6366F1", label: "🔵 MEDIUM" },
-  low: { bg: "rgba(34,197,94,0.06)", border: "rgba(34,197,94,0.2)", color: "#22C55E", label: "🟢 LOW" },
+  critical: { bg: "rgba(239,68,68,0.06)", border: "rgba(239,68,68,0.25)", color: "#EF4444", label: "CRITICAL" },
+  high: { bg: "rgba(245,158,11,0.06)", border: "rgba(245,158,11,0.25)", color: "#F59E0B", label: "HIGH" },
+  medium: { bg: "rgba(99,102,241,0.06)", border: "rgba(99,102,241,0.2)", color: "#6366F1", label: "MEDIUM" },
+  low: { bg: "rgba(34,197,94,0.06)", border: "rgba(34,197,94,0.2)", color: "#22C55E", label: "LOW" },
 };
 
 export default function HealthPage() {
@@ -37,6 +41,21 @@ export default function HealthPage() {
   const [loading, setLoading] = useState(true);
   const [animatedScore, setAnimatedScore] = useState(0);
 
+  // CFO Brief state
+  interface CfoBrief {
+    companyName: string;
+    weekSummary: { totalSpend: number; topCategories: { name: string; amount: number }[]; transactionCount: number };
+    monthToDate: { totalSpend: number };
+    cashPosition: { totalCash: number; runwayMonths: number };
+    profitability: { netProfit: number; profitMargin: number };
+    receivables: { outstanding: number; overdue: number; overdueCount: number };
+    alerts: string[];
+  }
+  const [cfoBrief, setCfoBrief] = useState<CfoBrief | null>(null);
+  const [cfoEmail, setCfoEmail] = useState("");
+  const [sendingCfo, setSendingCfo] = useState(false);
+  const [cfoSent, setCfoSent] = useState(false);
+
   useEffect(() => {
     fetch("/api/health").then((r) => r.json()).then((data) => {
       setScore(data.score || 0);
@@ -46,7 +65,8 @@ export default function HealthPage() {
       setTopCats(data.topCategories || []);
       setRecs(data.recommendations || []);
       setDataPoints(data.dataPoints || {});
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch((err: unknown) => clientLog.error("Failed to load health data", "health", "load", err)).finally(() => setLoading(false));
+    fetch("/api/reports/cfo-brief").then((r) => r.json()).then((d) => setCfoBrief(d)).catch(() => {});
   }, []);
 
   // Animated score counter
@@ -67,15 +87,11 @@ export default function HealthPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between" }}>
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}><Heart size={24} color="#F43F5E" /> Financial Health</h2>
-          <p>Comprehensive health score with AI-powered recommendations</p>
-        </div>
+      <PageHeader title="Financial Health" description="Comprehensive health score with AI-powered recommendations">
         <button className="btn btn-secondary" onClick={() => window.location.reload()} style={{ fontSize: 12, padding: "6px 14px" }}>
           <RefreshCw size={14} /> Re-analyze
         </button>
-      </div>
+      </PageHeader>
 
       {loading ? (
         <div style={{ textAlign: "center", padding: 80, color: "var(--text-secondary)" }}>Analyzing your financial data...</div>
@@ -107,7 +123,7 @@ export default function HealthPage() {
 
             {/* Key Metrics */}
             {financials && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+              <div className="responsive-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
                 <div className="kpi-card">
                   <div className="kpi-label"><TrendingUp size={14} color="#22C55E" /> Total Revenue (FY)</div>
                   <div className="kpi-value" style={{ fontSize: 18, color: "#22C55E" }}>{fmt(financials.totalRevenue)}</div>
@@ -123,7 +139,7 @@ export default function HealthPage() {
                   </div>
                 </div>
                 <div className="kpi-card" style={{ borderColor: financials.netProfit >= 0 ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)" }}>
-                  <div className="kpi-label">{financials.netProfit >= 0 ? "💰" : "⚠️"} Net {financials.netProfit >= 0 ? "Profit" : "Loss"}</div>
+                  <div className="kpi-label">{financials.netProfit >= 0 ? <Wallet size={14} style={{ display: "inline", verticalAlign: "middle" }} /> : <AlertTriangle size={14} style={{ display: "inline", verticalAlign: "middle" }} />} Net {financials.netProfit >= 0 ? "Profit" : "Loss"}</div>
                   <div className="kpi-value" style={{ fontSize: 18, color: financials.netProfit >= 0 ? "#22C55E" : "#EF4444" }}>
                     {fmt(Math.abs(financials.netProfit))}
                   </div>
@@ -146,7 +162,7 @@ export default function HealthPage() {
                   </div>
                 </div>
                 <div className="kpi-card">
-                  <div className="kpi-label">📊 Collection Days</div>
+                  <div className="kpi-label"><BarChart3 size={14} style={{ display: "inline", verticalAlign: "middle" }} /> Collection Days</div>
                   <div className="kpi-value" style={{ fontSize: 18 }}>
                     {financials.avgDaysToCollect > 0 ? `${financials.avgDaysToCollect}d` : "—"}
                   </div>
@@ -216,9 +232,109 @@ export default function HealthPage() {
             )}
           </div>
 
+          {/* Weekly CFO Brief */}
+          {cfoBrief && (
+            <div style={{
+              marginBottom: 24, padding: 24, borderRadius: 16,
+              background: "var(--bg-card)", border: "1px solid rgba(99, 102, 241, 0.2)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: "linear-gradient(135deg, #6366F1, #A855F7)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <Mail size={18} color="#fff" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Weekly CFO Brief</h3>
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Automated executive summary of your financial position</p>
+                </div>
+              </div>
+
+              {/* Brief Preview */}
+              <div className="responsive-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+                <div style={{ padding: 14, borderRadius: 10, background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.12)" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>This Week</div>
+                  <div style={{ fontSize: 18, fontWeight: 800 }}>{fmt(cfoBrief.weekSummary.totalSpend)}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{cfoBrief.weekSummary.transactionCount} txns</div>
+                </div>
+                <div style={{ padding: 14, borderRadius: 10, background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.12)" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>Cash Position</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#22C55E" }}>{fmt(cfoBrief.cashPosition.totalCash)}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{cfoBrief.cashPosition.runwayMonths >= 99 ? "∞" : cfoBrief.cashPosition.runwayMonths + "mo"} runway</div>
+                </div>
+                <div style={{ padding: 14, borderRadius: 10, background: cfoBrief.profitability.profitMargin >= 0 ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.06)", border: `1px solid ${cfoBrief.profitability.profitMargin >= 0 ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)"}` }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>Margin</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: cfoBrief.profitability.profitMargin >= 0 ? "#22C55E" : "#EF4444" }}>{cfoBrief.profitability.profitMargin}%</div>
+                </div>
+                <div style={{ padding: 14, borderRadius: 10, background: cfoBrief.receivables.overdue > 0 ? "rgba(245,158,11,0.06)" : "rgba(99,102,241,0.06)", border: `1px solid ${cfoBrief.receivables.overdue > 0 ? "rgba(245,158,11,0.12)" : "rgba(99,102,241,0.12)"}` }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>Outstanding AR</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: cfoBrief.receivables.overdue > 0 ? "#F59E0B" : "var(--text-primary)" }}>{fmt(cfoBrief.receivables.outstanding)}</div>
+                  {cfoBrief.receivables.overdueCount > 0 && <div style={{ fontSize: 10, color: "#F59E0B" }}>{cfoBrief.receivables.overdueCount} overdue</div>}
+                </div>
+              </div>
+
+              {/* Alerts */}
+              {cfoBrief.alerts.length > 0 && (
+                <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)" }}>
+                  {cfoBrief.alerts.map((a, i) => (
+                    <div key={i} style={{ fontSize: 12, padding: "3px 0", color: "var(--text-secondary)" }}>{a}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Top categories this week */}
+              {cfoBrief.weekSummary.topCategories.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Top spend this week</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {cfoBrief.weekSummary.topCategories.map((c) => (
+                      <span key={c.name} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.15)" }}>
+                        {c.name}: {fmt(c.amount)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Send Email */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="email"
+                  className="form-input"
+                  placeholder="founder@company.com"
+                  value={cfoEmail}
+                  onChange={(e) => { setCfoEmail(e.target.value); setCfoSent(false); }}
+                  style={{ flex: 1, fontSize: 13, padding: "8px 12px" }}
+                />
+                <button
+                  className="btn btn-primary"
+                  disabled={!cfoEmail || sendingCfo || cfoSent}
+                  onClick={async () => {
+                    setSendingCfo(true);
+                    try {
+                      const res = await fetch("/api/reports/cfo-brief", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email: cfoEmail }),
+                      });
+                      if (res.ok) setCfoSent(true);
+                    } catch (e) { console.warn("[Health] Non-critical error:", e instanceof Error ? e.message : String(e)); }
+                    setSendingCfo(false);
+                  }}
+                  style={{ padding: "8px 16px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <Send size={12} />
+                  {cfoSent ? "Sent ✓" : sendingCfo ? "Sending..." : "Send Brief"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Data Sources */}
           <div style={{ display: "flex", gap: 12, padding: "12px 16px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border-color)", fontSize: 12, color: "var(--text-tertiary)" }}>
-            <span>📊 Data used:</span>
+            <span><BarChart3 size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />Data used:</span>
             <span>{dataPoints.revenueMonths} revenue months</span>·
             <span>{dataPoints.expenseRecords} expenses</span>·
             <span>{dataPoints.invoiceCount} invoices</span>·

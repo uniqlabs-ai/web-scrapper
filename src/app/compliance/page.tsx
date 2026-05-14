@@ -1,7 +1,11 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import { CalendarDays, AlertTriangle, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface Deadline {
   date: string;
@@ -39,7 +43,7 @@ export default function CompliancePage() {
         setDeadlines(data.deadlines || []);
         setSummary(data.summary || { overdue: 0, dueToday: 0, upcoming: 0, total: 0 });
       })
-      .catch(console.error)
+      .catch((err: unknown) => clientLog.error("Failed to load compliance data", "compliance", "load", err))
       .finally(() => setLoading(false));
   }, []);
 
@@ -53,12 +57,7 @@ export default function CompliancePage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <CalendarDays size={24} /> Compliance Calendar
-        </h2>
-        <p>Tax deadlines, filing dates, and financial obligations</p>
-      </div>
+      <PageHeader title="Compliance Calendar" description="Tax deadlines, filing dates, and financial obligations" />
 
       {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
@@ -99,7 +98,7 @@ export default function CompliancePage() {
               color: filter === f ? "#fff" : "var(--text-secondary)",
             }}
           >
-            {f === "all" ? "All" : f === "overdue" ? `⚠ Overdue (${summary.overdue})` : f}
+            {f === "all" ? "All" : f === "overdue" ? `Overdue (${summary.overdue})` : f}
           </button>
         ))}
       </div>
@@ -108,14 +107,11 @@ export default function CompliancePage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: 60, color: "var(--text-secondary)" }}>Loading calendar...</div>
       ) : filtered.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: 60, background: "var(--bg-card)",
-          borderRadius: 16, border: "1px solid var(--border-color)",
-        }}>
-          <CheckCircle2 size={40} style={{ color: "#22C55E", marginBottom: 12 }} />
-          <h3 style={{ margin: "0 0 8px" }}>All clear!</h3>
-          <p style={{ color: "var(--text-secondary)", margin: 0 }}>No items match this filter</p>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          title="All clear!"
+          description="No items match this filter"
+        />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {filtered.map((d, i) => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect, useCallback } from "react";
 
 import { Contact2, Plus, Trash2, Mail, Phone, Building, FileText, Search, DollarSign, RefreshCw } from "lucide-react";
@@ -68,7 +70,7 @@ export default function ClientsPage() {
       });
       setDrawerOpen(true);
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to load clients", "clients", "load", err);
       toast("Failed to load client details", "error");
     }
   }

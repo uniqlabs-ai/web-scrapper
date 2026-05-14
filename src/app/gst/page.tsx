@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect } from "react";
 import { FileText, Calendar, ArrowDown, ArrowUp, Minus, Search, Download } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -73,7 +75,7 @@ export default function GSTReturnsPage() {
       if (res.ok) alert(data.message);
       else alert(data.error || "Failed to sync to ClearTax");
     } catch (e) {
-      console.error(e);
+      clientLog.error("Failed to load GST data", "gst", "load", e);
       alert("An error occurred while syncing.");
     } finally {
       setSyncing(false);
@@ -87,7 +89,7 @@ export default function GSTReturnsPage() {
       const res = await fetch(`/api/gst/hsn?q=${encodeURIComponent(hsnQuery)}`);
       const data = await res.json();
       setHsnResults(data.results || data.codes || []);
-    } catch (e) { console.error(e); }
+    } catch (e) { clientLog.error("Failed to file return", "gst", "file-return", e); }
     finally { setHsnLoading(false); }
   }
 
@@ -97,7 +99,7 @@ export default function GSTReturnsPage() {
       const res = await fetch(`/api/gst/einvoice?invoiceId=${einvoiceId}`);
       const data = await res.json();
       setEinvoiceData(data);
-    } catch (e) { console.error(e); }
+    } catch (e) { clientLog.error("Failed to search HSN", "gst", "hsn-search", e); }
   }
 
   async function load() {
@@ -110,7 +112,7 @@ export default function GSTReturnsPage() {
       setData3b(r3b);
       setData1(r1);
     } catch (err) {
-      console.error(err);
+      clientLog.error("Failed to generate e-invoice", "gst", "e-invoice", err);
     } finally {
       setLoading(false);
     }
