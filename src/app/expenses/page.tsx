@@ -1,5 +1,7 @@
 "use client";
 
+import { clientLog } from "@/lib/client-logger";
+
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus, X, CreditCard, Filter, Trash2, Upload, Receipt, PieChart, Users, TrendingDown, TrendingUp, List, LayoutDashboard, Lightbulb, Sparkles, CheckSquare, Fingerprint } from "lucide-react";
@@ -145,7 +147,7 @@ function ExpensesContent() {
           const matched = categories.find(c => c.name.toLowerCase() === data.category.toLowerCase());
           if (matched) setCategoryId(matched.id);
         }
-      } catch (e) { console.warn("[Expenses] Non-critical error:", e instanceof Error ? e.message : String(e)); }
+      } catch (e) { clientLog.warn("Non-critical error", "expenses", "parse-meta", e); }
       setSuggestingCategory(false);
     }, 800);
     return () => clearTimeout(delayDebounceFn);

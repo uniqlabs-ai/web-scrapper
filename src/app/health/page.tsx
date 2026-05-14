@@ -320,7 +320,7 @@ export default function HealthPage() {
                         body: JSON.stringify({ email: cfoEmail }),
                       });
                       if (res.ok) setCfoSent(true);
-                    } catch (e) { console.warn("[Health] Non-critical error:", e instanceof Error ? e.message : String(e)); }
+                    } catch (e) { clientLog.warn("Non-critical error", "health", "parse-impact", e); }
                     setSendingCfo(false);
                   }}
                   style={{ padding: "8px 16px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}

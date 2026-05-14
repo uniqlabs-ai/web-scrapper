@@ -569,7 +569,7 @@ export default function ImportPage() {
             {history.map((batch) => {
               const typeInfo = TYPE_ICONS[batch.type] || TYPE_ICONS.unknown;
               let meta: { detectedType?: string; summary?: string } = {};
-              try { meta = batch.columnMapping ? JSON.parse(batch.columnMapping) : {}; } catch (e) { console.warn("[Import] Non-critical error:", e instanceof Error ? e.message : String(e)); }
+              try { meta = batch.columnMapping ? JSON.parse(batch.columnMapping) : {}; } catch (e) { clientLog.warn("Non-critical error", "import", "parse-meta", e); }
               return (
                 <div key={batch.id} style={{
                   display: "flex", alignItems: "center", gap: 12,
