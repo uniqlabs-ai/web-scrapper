@@ -7,6 +7,7 @@ import { SkeletonTable } from "@/components/skeleton";
 import { DateRangeFilter } from "@/components/date-range-filter";
 import { formatCurrency } from "@/lib/currency";
 import { RevenueDetailDrawer } from "@/components/item-detail-drawer";
+import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, ColumnDef } from "@/components/data-table";
 import { AccessibleModal } from "@/components/accessible-modal";
@@ -142,7 +143,7 @@ export default function RevenuePage() {
       body: JSON.stringify({ query: "getRunway" }),
     })
       .then((res) => res.json())
-      .then((d) => setMrrData(d.data || d))
+      .then((d) => { if (d && !d.error) setMrrData(d.data || d); })
       .catch(() => {});
   };
 
@@ -442,7 +443,11 @@ export default function RevenuePage() {
               </div>
             </div>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}><p>No categorized revenue yet.</p></div>
+            <EmptyState
+              icon={PieChart}
+              title="No categorized revenue yet"
+              description="Assign categories to revenue records to see the breakdown."
+            />
           )}
         </div>
       )}
@@ -726,7 +731,11 @@ export default function RevenuePage() {
                 </div>
               </div>
             ) : (
-              <div className="empty-state" style={{ padding: 40 }}><p>Not enough data for trends</p></div>
+              <EmptyState
+                icon={TrendingUp}
+                title="Not enough data for trends"
+                description="Record more revenue over time to unlock trend analysis."
+              />
             )}
           </div>
         );
@@ -849,15 +858,29 @@ export default function RevenuePage() {
               data={filteredRevenues.slice(0, 100)}
               onRowClick={(row) => setSelectedRevenue(row)}
               emptyState={
-                <div className="empty-state" style={{ padding: 40, border: "none" }}>
-                  <h3>{hasActiveFilters ? "No revenue matches your filters" : "No revenue recorded"}</h3>
-                  <p>{hasActiveFilters ? "Try adjusting your filter criteria" : "Import bank statements or record revenue manually"}</p>
-                  {hasActiveFilters ? (
+                hasActiveFilters ? (
+                  <div className="empty-state" style={{ padding: 40, border: "none" }}>
+                    <h3>No revenue matches your filters</h3>
+                    <p>Try adjusting your filter criteria</p>
                     <button className="btn btn-primary btn-sm" onClick={clearFilters}><X size={14} /> Clear Filters</button>
-                  ) : (
-                    <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> Record Revenue</button>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={DollarSign}
+                    title="No revenue tracked yet"
+                    description="Import bank statements or record revenue manually to start tracking your income."
+                    action={
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                        <a href="/import" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                          Import Statement
+                        </a>
+                        <button className="btn btn-secondary" onClick={() => setShowCreate(true)}>
+                          <Plus size={16} /> Record Revenue
+                        </button>
+                      </div>
+                    }
+                  />
+                )
               }
             />
           )}

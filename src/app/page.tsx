@@ -13,8 +13,13 @@ import {
   CreditCard,
   PieChart as PieChartIcon,
   BarChart3,
+  AlertTriangle,
+  Bell,
+  ArrowRight,
 } from "lucide-react";
 import { SkeletonKPI } from "@/components/skeleton";
+import { StaggerContainer, SlideUp, HoverScale, FadeIn } from "@/components/animations";
+import { EmptyState } from "@/components/empty-state";
 import {
   AreaChart,
   Area,
@@ -30,9 +35,13 @@ import {
   PieChart,
   Pie,
 } from "recharts";
+import { CFOBriefWidget } from "@/components/cfo-brief-widget";
+import { ChartTooltip } from "@/components/chart-tooltip";
+import { ChartAccessibilityWrapper } from "@/components/chart-a11y-wrapper";
 
 interface DashboardData {
   monthlyRevenue: number;
+  totalMonthlyRevenue: number;
   burnRate: number;
   runwayMonths: number;
   outstandingInvoices: { count: number; total: number };
@@ -40,7 +49,7 @@ interface DashboardData {
   revenueGrowth: number;
   burnRateDetails: { trend: string; average3Month: number };
   runway: { projectedRunOutDate?: string; cashInBank: number };
-  revenueDetails: { currentARR: number; history: { month: string; amount: number }[] };
+  revenueDetails: { currentARR: number; currentMRR: number; history: { month: string; amount: number }[] };
 }
 
 interface CashFlowData {
@@ -54,66 +63,34 @@ interface PnLData {
   totalExpenses: number;
 }
 
-const CHART_COLORS = ["#6366F1", "#A855F7", "#EC4899", "#F59E0B", "#22C55E", "#3B82F6"];
+const CHART_COLORS = ["#6366F1", "#A855F7", "#EC4899", "#F59E0B", "#22C5E", "#3B82F6"];
 
-const formatINR = (n: number) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(n);
+import { formatCurrency, formatCompact } from "@/lib/currency";
 
-const formatShort = (n: number) => {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(0)}K`;
-  return `₹${n}`;
-};
+const formatINR = (n: number) => formatCurrency(n);
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border-color)",
-        borderRadius: 8,
-        padding: "10px 14px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-      }}
-    >
-      <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", marginBottom: 6 }}>
-        {label}
-      </p>
-      {payload.map((p: any) => (
-        <p
-          key={p.name}
-          style={{ margin: 0, fontSize: 13, fontWeight: 600, color: p.color }}
-        >
-          {p.name}: {formatINR(p.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
+const fmtShort = (n: number) => formatCompact(n);
+
+
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [cashFlow, setCashFlow] = useState<CashFlowData | null>(null);
   const [pnl, setPnl] = useState<PnLData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState<{ id: string; type: string; title: string; message: string; action?: string; actionUrl?: string }[]>([]);
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/dashboard").then((res) => res.json()),
+      fetch("/api/dashboard").then((res) => res.json()).catch(() => null),
       fetch("/api/reports/cashflow").then((res) => res.json()).catch(() => null),
       fetch("/api/reports/pnl").then((res) => res.json()).catch(() => null),
-    ]).then(([dashData, cfData, pnlData]) => {
-      setData(dashData);
-      setCashFlow(cfData);
-      setPnl(pnlData);
+      fetch("/api/alerts").then((res) => res.json()).catch(() => ({ alerts: [] })),
+    ]).then(([dashData, cfData, pnlData, alertData]) => {
+      if (dashData && !dashData.error) setData(dashData);
+      if (cfData && !cfData.error) setCashFlow(cfData);
+      if (pnlData && !pnlData.error) setPnl(pnlData);
+      setAlerts(alertData?.alerts || []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -132,14 +109,49 @@ export default function DashboardPage() {
     );
   }
 
+  // Detect empty database — all financial data is zero/empty
+  const isEmptyDb = !data ||
+    ((data.totalMonthlyRevenue ?? data.monthlyRevenue ?? 0) === 0 &&
+     (data.burnRate ?? 0) === 0 &&
+     (data.outstandingInvoices?.count ?? 0) === 0 &&
+     (data.totalExpensesThisMonth ?? 0) === 0);
+
+  if (isEmptyDb) {
+    return (
+      <div>
+        <div className="page-header">
+          <SlideUp delay={0.1}>
+            <h2>Dashboard</h2>
+            <p>Your financial overview at a glance</p>
+          </SlideUp>
+        </div>
+        <EmptyState
+          icon={TrendingUp}
+          title="Welcome to Finance Suite!"
+          description="Import a bank statement or add your first invoice to see your financial overview come to life."
+          action={
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <a href="/import" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                <ArrowRight size={16} /> Go to Import
+              </a>
+              <a href="/invoices?new=1" className="btn btn-secondary" style={{ textDecoration: 'none' }}>
+                <FileText size={16} /> Create Invoice
+              </a>
+            </div>
+          }
+        />
+      </div>
+    );
+  }
+
   const kpis = [
     {
       label: "Monthly Revenue",
-      value: formatINR(data?.monthlyRevenue ?? 0),
+      value: formatINR(data?.totalMonthlyRevenue ?? data?.monthlyRevenue ?? 0),
       change: data?.revenueGrowth ?? 0,
       color: "green" as const,
       icon: <TrendingUp size={20} />,
-      sub: `ARR ${formatINR(data?.revenueDetails?.currentARR ?? 0)}`,
+      sub: `MRR ${formatINR(data?.revenueDetails?.currentMRR ?? 0)} · ARR ${formatINR(data?.revenueDetails?.currentARR ?? 0)}`,
     },
     {
       label: "Burn Rate",
@@ -151,7 +163,7 @@ export default function DashboardPage() {
     },
     {
       label: "Runway",
-      value: data?.runwayMonths === Infinity ? "∞" : `${data?.runwayMonths ?? 0} mo`,
+      value: data?.runwayMonths == null ? "N/A" : data?.runwayMonths === Infinity ? "∞" : `${data.runwayMonths} mo`,
       change: null,
       color: (data?.runwayMonths ?? 0) > 12
         ? "green" as const
@@ -188,39 +200,91 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="page-header">
-        <h2>Dashboard</h2>
-        <p>Your financial overview at a glance</p>
+        <SlideUp delay={0.1}>
+          <h2>Dashboard</h2>
+          <p>Your financial overview at a glance</p>
+        </SlideUp>
       </div>
 
       {/* KPI Grid */}
-      <div className="kpi-grid">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className={`kpi-card ${kpi.color}`}>
-            <div className={`kpi-icon ${kpi.color}`}>{kpi.icon}</div>
-            <div className="kpi-label">{kpi.label}</div>
-            <div className="kpi-value">{kpi.value}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {kpi.change !== null && (
-                <span className={`kpi-change ${kpi.change > 0 ? "up" : kpi.change < 0 ? "down" : "neutral"}`}>
-                  {kpi.change > 0 ? <ArrowUpRight size={12} /> : kpi.change < 0 ? <ArrowDownRight size={12} /> : <Minus size={12} />}
-                  {Math.abs(kpi.change)}%
-                </span>
-              )}
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{kpi.sub}</span>
+      <StaggerContainer className="kpi-grid" delay={0.08}>
+        {kpis.map((kpi, idx) => (
+          <SlideUp key={kpi.label} delay={idx * 0.05}>
+            <HoverScale className={`kpi-card ${kpi.color}`}>
+              <div className={`kpi-icon ${kpi.color}`}>{kpi.icon}</div>
+              <div className="kpi-label">{kpi.label}</div>
+              <div className="kpi-value">{kpi.value}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {kpi.change !== null && (
+                  <span className={`kpi-change ${kpi.change > 0 ? "up" : kpi.change < 0 ? "down" : "neutral"}`}>
+                    {kpi.change > 0 ? <ArrowUpRight size={12} /> : kpi.change < 0 ? <ArrowDownRight size={12} /> : <Minus size={12} />}
+                    {Math.abs(kpi.change)}%
+                  </span>
+                )}
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{kpi.sub}</span>
+              </div>
+            </HoverScale>
+          </SlideUp>
+        ))}
+      </StaggerContainer>
+
+      {/* Smart Alerts */}
+      {alerts.length > 0 && (
+        <FadeIn delay={0.2}>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Bell size={16} color="var(--accent-amber)" />
+              <span style={{ fontSize: 14, fontWeight: 600 }}>Smart Alerts</span>
+              <span style={{ fontSize: 11, background: "var(--accent-red-glow)", color: "var(--accent-red)", padding: "2px 8px", borderRadius: 12, fontWeight: 600 }}>{alerts.length}</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {alerts.map((alert) => {
+                const colors = {
+                  danger: { bg: "rgba(255, 71, 87, 0.08)", border: "rgba(255, 71, 87, 0.25)", icon: "var(--accent-red)" },
+                  warning: { bg: "rgba(240, 165, 0, 0.08)", border: "rgba(240, 165, 0, 0.25)", icon: "var(--accent-amber)" },
+                  info: { bg: "rgba(78, 154, 241, 0.08)", border: "rgba(78, 154, 241, 0.25)", icon: "var(--accent-blue)" },
+                };
+                const c = colors[alert.type as keyof typeof colors] || colors.info;
+                return (
+                  <div key={alert.id} style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "12px 16px", borderRadius: 10,
+                    background: c.bg, border: `1px solid ${c.border}`,
+                  }}>
+                    <AlertTriangle size={16} color={c.icon} style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{alert.title}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{alert.message}</div>
+                    </div>
+                    {alert.actionUrl && (
+                      <HoverScale>
+                        <a href={alert.actionUrl} style={{
+                          fontSize: 12, fontWeight: 600, color: c.icon,
+                          display: "flex", alignItems: "center", gap: 4,
+                          textDecoration: "none", whiteSpace: "nowrap",
+                        }}>
+                          {alert.action} <ArrowRight size={12} />
+                        </a>
+                      </HoverScale>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
-        ))}
-      </div>
+        </FadeIn>
+      )}
 
       {/* Charts Row 1: Revenue Trend + Quick Actions */}
-      <div className="section-grid">
-        <div className="chart-container">
+      <StaggerContainer className="section-grid" delay={0.1}>
+        <SlideUp className="chart-container" delay={0.3}>
           <div className="chart-header">
             <h3><DollarSign size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />Revenue Trend</h3>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Last 6 months</span>
           </div>
           {history.length > 0 ? (
             <div style={{ width: "100%", height: 220 }}>
+              <ChartAccessibilityWrapper label="Revenue trend over last 6 months" data={history} dataKeys={["month", "amount"]}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={history} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
                   <defs>
@@ -231,77 +295,60 @@ export default function DashboardPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--text-secondary)" }} tickFormatter={(v) => v.slice(5)} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--text-secondary)" }} tickFormatter={formatShort} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--text-secondary)" }} tickFormatter={fmtShort} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} />
                   <Area type="monotone" dataKey="amount" name="Revenue" stroke="#6366F1" strokeWidth={2.5} fill="url(#revenueGrad)" dot={{ r: 4, fill: "#6366F1", strokeWidth: 0 }} activeDot={{ r: 6 }} />
                 </AreaChart>
               </ResponsiveContainer>
+              </ChartAccessibilityWrapper>
             </div>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}>
-              <DollarSign size={32} style={{ opacity: 0.3 }} />
-              <p style={{ marginTop: 8 }}>No revenue data yet</p>
-            </div>
+            <EmptyState
+              icon={DollarSign}
+              title="No revenue data yet"
+              description="Record revenue to see your history and trends over time."
+            />
           )}
-        </div>
+        </SlideUp>
 
-        <div className="chart-container">
-          <div className="chart-header">
-            <h3>Quick Actions</h3>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <a href="/invoices" className="btn btn-primary" style={{ justifyContent: "center" }}>
-              <FileText size={16} /> Create Invoice
-            </a>
-            <a href="/expenses" className="btn btn-secondary" style={{ justifyContent: "center" }}>
-              <CreditCard size={16} /> Log Expense
-            </a>
-            <a href="/revenue" className="btn btn-secondary" style={{ justifyContent: "center" }}>
-              <TrendingUp size={16} /> Record Revenue
-            </a>
-          </div>
-          <div style={{
-            marginTop: 24, padding: 16,
-            background: "var(--bg-input)", borderRadius: "var(--radius-md)",
-          }}>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>CASH IN BANK</p>
-            <p style={{ fontSize: 24, fontWeight: 800, letterSpacing: -1 }}>
-              {formatINR(data?.runway?.cashInBank ?? 0)}
-            </p>
-          </div>
-        </div>
-      </div>
+        <SlideUp className="chart-container" delay={0.4}>
+          <CFOBriefWidget />
+        </SlideUp>
+      </StaggerContainer>
 
       {/* Charts Row 2: Cash Flow Projection + Expense Breakdown */}
-      <div className="section-grid" style={{ marginTop: 24 }}>
-        <div className="chart-container">
+      <StaggerContainer className="section-grid" delay={0.2}>
+        <SlideUp className="chart-container" delay={0.5}>
           <div className="chart-header">
             <h3><BarChart3 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />Cash Flow Projection</h3>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Next 6 months</span>
           </div>
           {cfProjections.length > 0 ? (
             <div style={{ width: "100%", height: 220 }}>
+              <ChartAccessibilityWrapper label="Cash flow projection for next 6 months" data={cfProjections} dataKeys={["month", "inflow", "outflow"]}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={cfProjections} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--text-secondary)" }} tickFormatter={(v) => v.split(" ")[0]} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--text-secondary)" }} tickFormatter={formatShort} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--text-secondary)" }} tickFormatter={fmtShort} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="inflow" name="Inflow" fill="#22C55E" radius={[4, 4, 0, 0]} barSize={16} />
                   <Bar dataKey="outflow" name="Outflow" fill="#F43F5E" radius={[4, 4, 0, 0]} barSize={16} />
                 </BarChart>
               </ResponsiveContainer>
+              </ChartAccessibilityWrapper>
             </div>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}>
-              <BarChart3 size={32} style={{ opacity: 0.3 }} />
-              <p style={{ marginTop: 8 }}>Add data to see projections</p>
-            </div>
+            <EmptyState
+              icon={BarChart3}
+              title="No projection data"
+              description="Import your bank statements to see automatic cash flow projections."
+            />
           )}
-        </div>
+        </SlideUp>
 
-        <div className="chart-container">
+        <SlideUp className="chart-container" delay={0.6}>
           <div className="chart-header">
             <h3><PieChartIcon size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />Top Expenses</h3>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>This month</span>
@@ -309,6 +356,7 @@ export default function DashboardPage() {
           {pieData.length > 0 ? (
             <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
               <div style={{ width: 140, height: 140, flexShrink: 0 }}>
+                <ChartAccessibilityWrapper label="Top expense categories this month" data={pieData} dataKeys={["name", "value"]}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -329,6 +377,7 @@ export default function DashboardPage() {
                     <Tooltip formatter={(value) => formatINR(Number(value))} />
                   </PieChart>
                 </ResponsiveContainer>
+                </ChartAccessibilityWrapper>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
                 {expenseCategories.map((cat, i) => {
@@ -346,13 +395,14 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}>
-              <PieChartIcon size={32} style={{ opacity: 0.3 }} />
-              <p style={{ marginTop: 8 }}>No expenses this month</p>
-            </div>
+            <EmptyState
+              icon={PieChartIcon}
+              title="No expenses this month"
+              description="Record expenses to see your top spending categories."
+            />
           )}
-        </div>
-      </div>
+        </SlideUp>
+      </StaggerContainer>
     </div>
   );
 }

@@ -118,7 +118,7 @@ function ExpensesContent() {
   const loadConfidence = () => {
     fetch("/api/expenses/confidence")
       .then((res) => res.json())
-      .then((d) => setConfStats(d))
+      .then((d) => { if (d && !d.error) setConfStats(d); })
       .catch(() => {});
   };
 
@@ -595,9 +595,11 @@ function ExpensesContent() {
               </div>
             </div>
           ) : (
-            <div className="empty-state" style={{ padding: 40 }}>
-              <p>No categorized expenses yet. Import bank statements to auto-categorize.</p>
-            </div>
+            <EmptyState
+              icon={PieChart}
+              title="No categorized expenses yet"
+              description="Import bank statements to auto-categorize your expenses."
+            />
           )}
         </div>
       )}
@@ -888,7 +890,11 @@ function ExpensesContent() {
                 </div>
               </div>
             ) : (
-              <div className="empty-state" style={{ padding: 40 }}><p>Not enough data for trends</p></div>
+              <EmptyState
+                icon={TrendingUp}
+                title="Not enough data for trends"
+                description="Record more expenses over time to unlock trend analysis."
+              />
             )}
           </div>
         );

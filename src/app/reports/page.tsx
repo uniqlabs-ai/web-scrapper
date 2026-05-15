@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { SkeletonCard } from "@/components/skeleton";
+import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import {
   BarChart,
@@ -286,6 +287,18 @@ export default function ReportsPage() {
       ) : (
         <>
           {/* P&L Tab */}
+          {tab === "pnl" && !pnl && (
+            <EmptyState
+              icon={BarChart3}
+              title="Not enough data for reports"
+              description="Import transactions or record expenses and revenue to generate your P&L, cash flow, and tax reports."
+              action={
+                <a href="/import" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  Go to Import →
+                </a>
+              }
+            />
+          )}
           {tab === "pnl" && pnl && (
             <>
               {/* Summary KPIs */}
@@ -306,7 +319,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="kpi-card amber">
                   <div className="kpi-label">Profit Margin</div>
-                  <div className="kpi-value" style={{ fontSize: 22 }}>{pnl.profitMargin.toFixed(1)}%</div>
+                  <div className="kpi-value" style={{ fontSize: 22 }}>{(pnl.profitMargin ?? 0).toFixed(1)}%</div>
                 </div>
               </div>
 
@@ -331,9 +344,11 @@ export default function ReportsPage() {
                       </ChartAccessibilityWrapper>
                     </div>
                   ) : (
-                    <div className="empty-state" style={{ padding: 40 }}>
-                      <p style={{ color: "var(--text-muted)" }}>No revenue data</p>
-                    </div>
+                    <EmptyState
+                      icon={BarChart3}
+                      title="No revenue data"
+                      description="No revenue recorded for this period."
+                    />
                   )}
                 </div>
 
@@ -360,9 +375,11 @@ export default function ReportsPage() {
                       </ChartAccessibilityWrapper>
                     </div>
                   ) : (
-                    <div className="empty-state" style={{ padding: 40 }}>
-                      <p style={{ color: "var(--text-muted)" }}>No expense data</p>
-                    </div>
+                    <EmptyState
+                      icon={Landmark}
+                      title="No expense data"
+                      description="No expenses recorded for this period."
+                    />
                   )}
                 </div>
               </div>
@@ -370,6 +387,18 @@ export default function ReportsPage() {
           )}
 
           {/* Cash Flow Tab */}
+          {tab === "cashflow" && !cashFlow && (
+            <EmptyState
+              icon={TrendingUp}
+              title="No cash flow data yet"
+              description="Import bank transactions to generate cash flow projections and runway estimates."
+              action={
+                <a href="/import" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  Import Bank Statement
+                </a>
+              }
+            />
+          )}
           {tab === "cashflow" && cashFlow && (
             <>
               <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 24 }}>
@@ -421,9 +450,11 @@ export default function ReportsPage() {
                     </ChartAccessibilityWrapper>
                   </div>
                 ) : (
-                  <div className="empty-state" style={{ padding: 40 }}>
-                    <p style={{ color: "var(--text-muted)" }}>No projections available</p>
-                  </div>
+                  <EmptyState
+                    icon={TrendingUp}
+                    title="No projections available"
+                    description="Need more historical data to forecast cash flow."
+                  />
                 )}
               </div>
 
@@ -457,6 +488,18 @@ export default function ReportsPage() {
           )}
 
           {/* Tax Tab */}
+          {tab === "tax" && !tax && (
+            <EmptyState
+              icon={Calculator}
+              title="No GST data available"
+              description="Create invoices and record expenses with GST to generate your tax summary."
+              action={
+                <a href="/invoices?new=1" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  Create Invoice
+                </a>
+              }
+            />
+          )}
           {tab === "tax" && tax && (
             <>
               <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 24 }}>
@@ -539,6 +582,18 @@ export default function ReportsPage() {
           )}
 
           {/* Aging Tab — Enhanced Analysis */}
+          {tab === "aging" && !aging && (
+            <EmptyState
+              icon={Landmark}
+              title="No aging data"
+              description="Send invoices to clients to see receivables aging analysis."
+              action={
+                <a href="/invoices?new=1" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  Create Invoice
+                </a>
+              }
+            />
+          )}
           {tab === "aging" && aging && (() => {
             // DSO calculation
             const dso = aging.totalOutstanding > 0 && aging.items.length > 0
@@ -765,7 +820,16 @@ export default function ReportsPage() {
               </div>
             </div>
           ) : (
-            <p style={{ color: "var(--text-secondary)" }}>Loading comparison data...</p>
+            <EmptyState
+              icon={DollarSign}
+              title="No comparison data yet"
+              description="Record revenue and expenses across multiple periods to see comparison analysis."
+              action={
+                <a href="/import" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  Import Data
+                </a>
+              }
+            />
           )}
         </div>
       )}

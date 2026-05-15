@@ -2,10 +2,11 @@ import { prisma } from "./prisma";
 import type { RunwayData, BurnRateData, RevenueData } from "./types";
 
 export async function getRunway(userId: string): Promise<RunwayData> {
-  const accounts = await prisma.account.findMany({
+  const bankAccounts = await prisma.bankAccount.findMany({
     where: { userId, isActive: true },
+    take: 100, // RELIABILITY: Safety ceiling
   });
-  const cashInBank = accounts.reduce(
+  const cashInBank = bankAccounts.reduce(
     (sum, a) => sum + Number(a.currentBalance),
     0
   );
@@ -55,8 +56,10 @@ export async function getBurnRate(userId: string): Promise<BurnRateData> {
     Math.round((Number(threeMonthExpenses._sum.amount ?? 0) / 3) * 100) / 100;
 
   let trend: BurnRateData["trend"] = "stable";
-  if (currentMonth > previousMonth * 1.1) trend = "increasing";
-  else if (currentMonth < previousMonth * 0.9) trend = "decreasing";
+  if (previousMonth > 0) {
+    if (currentMonth > previousMonth * 1.1) trend = "increasing";
+    else if (currentMonth < previousMonth * 0.9) trend = "decreasing";
+  }
 
   return { currentMonth, previousMonth, average3Month, trend };
 }
@@ -70,12 +73,22 @@ export async function getRevenueData(userId: string): Promise<RevenueData> {
   const revenues = await prisma.revenue.findMany({
     where: { userId, month: { gte: sixMonthsAgo } },
     orderBy: { month: "asc" },
+    take: 5000, // RELIABILITY: Safety ceiling
   });
 
   const history = revenues.map((r) => ({
     month: r.month.toISOString().slice(0, 7),
     amount: Number(r.amount),
   }));
+
+  // Aggregate history by month for the chart
+  const historyByMonth: Record<string, number> = {};
+  for (const h of history) {
+    historyByMonth[h.month] = (historyByMonth[h.month] || 0) + h.amount;
+  }
+  const aggregatedHistory = Object.entries(historyByMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({ month, amount }));
 
   const currentMonthRevenues = revenues.filter(
     (r) => r.month >= currentMonthStart
@@ -84,6 +97,12 @@ export async function getRevenueData(userId: string): Promise<RevenueData> {
     (r) => r.month >= prevMonthStart && r.month < currentMonthStart
   );
 
+  // Total monthly revenue (all types) for the current month
+  const totalMonthlyRevenue = currentMonthRevenues.reduce(
+    (sum, r) => sum + Number(r.amount), 0
+  );
+
+  // MRR = only recurring revenue
   const currentMRR = currentMonthRevenues
     .filter((r) => r.type === "recurring")
     .reduce((sum, r) => sum + Number(r.amount), 0);
@@ -96,7 +115,7 @@ export async function getRevenueData(userId: string): Promise<RevenueData> {
       ? Math.round(((currentMRR - previousMRR) / previousMRR) * 100 * 10) / 10
       : 0;
 
-  return { currentMRR, currentARR, previousMRR, growth, history };
+  return { currentMRR, currentARR, previousMRR, growth, history: aggregatedHistory, totalMonthlyRevenue };
 }
 
 async function getMonthlyBurn(userId: string): Promise<number> {
