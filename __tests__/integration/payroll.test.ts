@@ -76,6 +76,26 @@ describe('GET /api/payroll', () => {
     expect(d.employees[0].name).toBe('Alice Smith');
   });
 
+  it('handles malformed aliases JSON in employee', async () => {
+    (mp.employee.findMany as any).mockResolvedValue([
+      { id:'e1', employeeId:'EMP-001', name:'Alice', aliases:'{{invalid}', basicSalary:50000, hra:20000, ctc:1200000, isActive:true, type:'employee', paymentBasis:null, joinDate:new Date(), email:null, designation:null, department:null },
+    ]);
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    const d = await res.json();
+    expect(d.employees).toHaveLength(1);
+  });
+
+  it('handles null aliases in employee', async () => {
+    (mp.employee.findMany as any).mockResolvedValue([
+      { id:'e1', employeeId:'EMP-001', name:'Alice', aliases:null, basicSalary:50000, hra:20000, ctc:1200000, isActive:true, type:'employee', paymentBasis:null, joinDate:new Date(), email:null, designation:null, department:null },
+    ]);
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    const d = await res.json();
+    expect(d.employees).toHaveLength(1);
+  });
+
   it('returns 500 on error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(req());

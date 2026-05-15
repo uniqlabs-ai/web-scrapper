@@ -3,8 +3,9 @@ import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    expense: { findFirst: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[]}), create: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[]}) },
-    revenue: { findFirst: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2026-05-13T00:31:19.308Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[]}), create: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2026-05-13T00:31:19.308Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[]}) }
+    expense: { findFirst: vi.fn(), create: vi.fn() },
+    revenue: { findFirst: vi.fn(), create: vi.fn() },
+    user: { findUnique: vi.fn() },
   },
 }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
@@ -14,32 +15,167 @@ import { prisma } from '@/lib/prisma';
 import { verifyWebhookSignature } from '@/lib/webhooks';
 import { POST } from '@/app/api/v1/webhooks/inbound/route';
 
-import { mockPrisma } from '../helpers/prisma-mock';
-const mp = mockPrisma(prisma);
+const mp = vi.mocked(prisma);
 const mw = vi.mocked(verifyWebhookSignature);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mw.mockReturnValue(true);
+  // Mock organizationId resolution for tenant-scoped webhook processing
+  (mp.user?.findUnique as any)?.mockResolvedValue({ organizationId: 'org-1' });
+  (mp.expense.findFirst as any).mockResolvedValue(null);
+  (mp.revenue.findFirst as any).mockResolvedValue(null);
 });
 
-function req(method='GET', body?:unknown, url='http://localhost:3008/api/v1/webhooks/inbound'): NextRequest {
-  const init: Record<string,unknown> = { method };
-  if (body) { init.body=JSON.stringify(body); init.headers={'Content-Type':'application/json'}; }
-  return new NextRequest(new URL(url), init);
+function req(body: any): NextRequest {
+  return new NextRequest(new URL('http://localhost:3008/api/v1/webhooks/inbound'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json', 'x-webhook-signature': 'sig123' },
+  });
 }
 
 describe('POST /api/v1/webhooks/inbound', () => {
-  it('handles POST successfully', async () => {
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeLessThan(600);
-    const data = await res.json();
-    expect(data).toBeDefined();
-  });
-
   it('rejects invalid signature', async () => {
     mw.mockReturnValue(false);
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect([400, 401]).toContain(res.status);
+    const res = await POST(req({ productId: 'hiring', event: 'offer.accepted' }));
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects missing productId or event', async () => {
+    const res = await POST(req({ productId: 'hiring' })); // missing event
+    expect(res.status).toBe(400);
+  });
+
+  it('handles offer.accepted (hiring) and creates expense', async () => {
+    const res = await POST(req({
+      productId: 'hiring',
+      event: 'offer.accepted',
+      summary: 'New hire',
+      timestamp: new Date().toISOString(),
+      data: { offerId: 'o1', salary: 100000, candidateName: 'John', userId: 'u1' }
+    }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.processed.action).toBe('expense.created');
+    expect(mp.expense.create).toHaveBeenCalled();
+  });
+
+  it('handles offer.accepted duplicate', async () => {
+    (mp.expense.findFirst as any).mockResolvedValue({ id: 'e1' });
+    const res = await POST(req({
+      productId: 'hiring',
+      event: 'offer.accepted',
+      summary: 'New hire',
+      timestamp: new Date().toISOString(),
+      data: { offerId: 'o1', salary: 100000 }
+    }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.processed.action).toBe('duplicate.skipped');
+    expect(mp.expense.create).not.toHaveBeenCalled();
+  });
+
+  it('handles deal.closed (uniqlabs) and creates revenue', async () => {
+    const res = await POST(req({
+      productId: 'uniqlabs',
+      event: 'deal.closed',
+      summary: 'New deal',
+      timestamp: new Date().toISOString(),
+      data: { dealId: 'd1', dealValue: 50000, recurring: true }
+    }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.processed.action).toBe('revenue.created');
+    expect(mp.revenue.create).toHaveBeenCalled();
+  });
+
+  it('handles deal.closed duplicate', async () => {
+    (mp.revenue.findFirst as any).mockResolvedValue({ id: 'r1' });
+    const res = await POST(req({
+      productId: 'uniqlabs',
+      event: 'deal.closed',
+      summary: 'New deal',
+      timestamp: new Date().toISOString(),
+      data: { dealId: 'd1', dealValue: 50000 }
+    }));
+    const data = await res.json();
+    expect(data.processed.action).toBe('duplicate.skipped');
+  });
+
+  it('handles campaign.launched (gtm) and creates expense', async () => {
+    const res = await POST(req({
+      productId: 'gtm',
+      event: 'campaign.launched',
+      summary: 'New campaign',
+      timestamp: new Date().toISOString(),
+      data: { campaignId: 'c1', budget: 10000, campaignName: 'Summer Promo' }
+    }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.processed.action).toBe('expense.created');
+    expect(mp.expense.create).toHaveBeenCalled();
+  });
+
+  it('handles campaign.launched duplicate', async () => {
+    (mp.expense.findFirst as any).mockResolvedValue({ id: 'e2' });
+    const res = await POST(req({
+      productId: 'gtm',
+      event: 'campaign.launched',
+      summary: 'New campaign',
+      timestamp: new Date().toISOString(),
+      data: { campaignId: 'c1', budget: 10000 }
+    }));
+    const data = await res.json();
+    expect(data.processed.action).toBe('duplicate.skipped');
+  });
+
+  it('handles subscription.renewed and creates revenue', async () => {
+    const res = await POST(req({
+      productId: 'saas',
+      event: 'subscription.renewed',
+      summary: 'Renewal',
+      timestamp: new Date().toISOString(),
+      data: { subscriptionId: 's1', amount: 99 }
+    }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.processed.action).toBe('revenue.created');
+    expect(mp.revenue.create).toHaveBeenCalled();
+  });
+
+  it('handles subscription.renewed duplicate', async () => {
+    (mp.revenue.findFirst as any).mockResolvedValue({ id: 'r2' });
+    const res = await POST(req({
+      productId: 'saas',
+      event: 'subscription.renewed',
+      summary: 'Renewal',
+      timestamp: new Date().toISOString(),
+      data: { subscriptionId: 's1', amount: 99 }
+    }));
+    const data = await res.json();
+    expect(data.processed.action).toBe('duplicate.skipped');
+  });
+
+  it('handles unknown event types gracefully', async () => {
+    const res = await POST(req({
+      productId: 'unknown',
+      event: 'unknown.event',
+      summary: 'Something',
+      timestamp: new Date().toISOString(),
+      data: {}
+    }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.processed.action).toBe('event.logged');
+  });
+
+  it('handles JSON parsing errors', async () => {
+    const res = await POST(new NextRequest(new URL('http://localhost:3008/api/v1/webhooks/inbound'), {
+      method: 'POST',
+      body: 'invalid-json',
+      headers: { 'x-webhook-signature': 'sig' }
+    }));
+    expect(res.status).toBe(400); // Returns 400 with "Invalid JSON payload"
   });
 });

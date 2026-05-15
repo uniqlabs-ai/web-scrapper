@@ -1,18 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
 import { generateInvoicePDF } from "@/lib/pdf";
+import { rateLimit } from "@/lib/rate-limit";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const InvoiceIdParamSchema = z.object({
+  id: z.string().min(1, "Invoice ID is required"),
+});
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId();
-    const { id } = await params;
+    const limited = rateLimit(_request, { windowSec: 60, max: 10, prefix: "invoice-email" });
+    if (limited) return limited;
+    const { userId, organizationId } = await requireTenant();
+    const rawParams = await params;
+    const paramsParsed = InvoiceIdParamSchema.safeParse(rawParams);
+    if (!paramsParsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: paramsParsed.error.issues }, { status: 400 });
+    }
+    const { id } = paramsParsed.data;
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id, userId },
+      where: { id, userId, organizationId },
       include: {
         client: true,
         lineItems: true,
@@ -29,6 +43,16 @@ export async function POST(
         { error: "Client has no email address" },
         { status: 400 }
       );
+    }
+
+    let paymentUpiId: string | undefined = undefined;
+    if (invoice.organization?.alertSettings) {
+      try {
+        const settings = JSON.parse(invoice.organization.alertSettings);
+        if (settings.paymentUpiId) paymentUpiId = settings.paymentUpiId;
+      } catch (e: unknown) {
+        log.warn("Malformed alertSettings JSON", { module: "invoices", action: "email", meta: { error: e instanceof Error ? e.message : String(e) } });
+      }
     }
 
     const pdfBuffer = generateInvoicePDF({
@@ -61,6 +85,7 @@ export async function POST(
       isInterState: invoice.isInterState ?? false,
       currency: invoice.currency,
       notes: invoice.notes || undefined,
+      paymentUpiId,
     });
 
     const resendKey = process.env.RESEND_API_KEY;
@@ -104,6 +129,10 @@ export async function POST(
                 </td>
               </tr>
             </table>
+            ${paymentUpiId && invoice.status !== "paid" ? `
+            <div style="margin-bottom: 24px; text-align: center;">
+              <a href="upi://pay?pa=${paymentUpiId}&pn=${encodeURIComponent(companyName)}&am=${invoice.total}&tr=${invoice.invoiceNumber}&cu=INR" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Pay Instantly via UPI</a>
+            </div>` : ""}
             <p style="color: #9ca3af; font-size: 12px;">
               Sent via Founder OS Finance
             </p>
@@ -120,7 +149,7 @@ export async function POST(
 
     if (!emailResponse.ok) {
       const err = await emailResponse.text();
-      console.error("Resend API error:", err);
+      log.error("Resend API error", { module: "invoices", action: "email", error: toLogError(err) });
       return NextResponse.json(
         { error: "Failed to send email" },
         { status: 502 }
@@ -138,7 +167,7 @@ export async function POST(
       message: `Invoice emailed to ${invoice.client.email}`,
     });
   } catch (error) {
-    console.error("Email invoice error:", error);
+    log.error("Email invoice error", { module: "invoices", action: "email", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to email invoice" },
       { status: 500 }

@@ -1,21 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
-import { TDS_SECTIONS } from "@/lib/tds";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const Form16aQuerySchema = z.object({
+  quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]).default("Q1"),
+  fy: z.string().regex(/^\d{4}-\d{4}$/, "fy must be YYYY-YYYY").optional(),
+  vendorId: z.string().min(1).optional(),
+});
 
 /**
  * GET /api/tds/form16a — Generate Form 16A data (TDS certificate for vendors)
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
-    const quarter = searchParams.get("quarter") || "Q1";
-    const fy = searchParams.get("fy") || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
-    const vendorId = searchParams.get("vendorId");
+
+    const parsed = Form16aQuerySchema.safeParse({
+      quarter: searchParams.get("quarter") || undefined,
+      fy: searchParams.get("fy") || undefined,
+      vendorId: searchParams.get("vendorId") || undefined,
+    });
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: parsed.error.issues }, { status: 400 });
+    }
+    const { quarter, vendorId } = parsed.data;
+    const fy = parsed.data.fy || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
 
     const org = await prisma.organization.findFirst({
-      where: { users: { some: { id: userId } } },
+      where: { id: organizationId },
     });
 
     // Quarter date ranges
@@ -31,11 +46,13 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {
       userId,
+      organizationId,
       date: { gte: range.from, lte: range.to },
     };
     if (vendorId) where.vendorId = vendorId;
 
     const expenses = await prisma.expense.findMany({
+      take: 10000,
       where,
       include: { category: true },
       orderBy: { date: "asc" },
@@ -49,17 +66,40 @@ export async function GET(request: NextRequest) {
       if (!vendorMap[vendor]) vendorMap[vendor] = { vendor, expenses: [], totalPaid: 0, tdsDeducted: 0 };
       vendorMap[vendor].expenses.push(e);
       vendorMap[vendor].totalPaid += Number(e.amount);
-      // Simplified TDS calc: 10% for professional services, 2% for contractors, 1% otherwise
+      // TDS rate per category — FY 2025-26 rates
       const cat = e.category?.name?.toLowerCase() || "";
-      const tdsRate = cat.includes("professional") || cat.includes("consulting") ? 0.10
-        : cat.includes("contract") ? 0.02 : 0.01;
+      let tdsRate = 0;
+      if (cat.includes("professional") || cat.includes("consulting") || cat.includes("legal") || cat.includes("audit")) {
+        tdsRate = 0.10; // 194J(b) — 10%
+      } else if (cat.includes("technical") || cat.includes("call center")) {
+        tdsRate = 0.02; // 194J(a) — 2%
+      } else if (cat.includes("contract") || cat.includes("labour") || cat.includes("maintenance")) {
+        tdsRate = 0.02; // 194C — 2% (company) or 1% (individual) — defaulting to company
+      } else if (cat.includes("commission") || cat.includes("brokerage")) {
+        tdsRate = 0.02; // 194H — 2% (FY 2025-26, was 5%)
+      } else if (cat.includes("rent")) {
+        tdsRate = 0.10; // 194I(b) — 10% (building)
+      } else if (cat.includes("interest")) {
+        tdsRate = 0.10; // 194A — 10%
+      }
       vendorMap[vendor].tdsDeducted += Math.round(Number(e.amount) * tdsRate);
     }
 
-    const certificates = Object.values(vendorMap).map((v) => ({
-      certificateNumber: `F16A-${quarter}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+    // Check for active tax network sync credentials before simulating compliance certificates!
+    if (!org?.gstNumber || org.gstNumber.trim() === "") {
+        return NextResponse.json({ error: "Government Tax Setup Incomplete. Cannot retrieve Form 16A Certificates legally." }, { status: 403 });
+    }
+
+    const unmappedCertificates = Object.values(vendorMap).filter(v => v.tdsDeducted > 0);
+
+    // Instead of generating mocked data with Math.random, normally we'd query the DB 
+    // for TRACES downloaded certificates. If we don't have them locally mapped, we halt.
+    // Assuming TRACES documents aren't stored in Prisma yet, this enforces an honest sync path.
+    const certificates = unmappedCertificates.map((v) => ({
+      certificateNumber: "PENDING_TRACES_SYNC", // Demanded real Government Cert mapping
       deductorName: org?.name || "Company",
-      deductorTAN: org?.gstNumber ? `TAN${org.gstNumber.slice(2, 12)}` : "TANXXXXXXX",
+      deductorTAN: "PENDING_TAN_SYNC",
+
       deducteeName: v.vendor,
       quarter,
       financialYear: fy,
@@ -80,7 +120,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Form 16A error:", error);
+    log.error("Form 16A error", { module: "tds", action: "form16a", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

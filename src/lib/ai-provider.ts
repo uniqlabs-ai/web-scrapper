@@ -6,6 +6,7 @@
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { log, toLogError } from "@/lib/logger";
 
 const SYSTEM_PROMPT = `You are a finance copilot for a startup. You have access to the following data queries:
 
@@ -18,16 +19,22 @@ QUERIES (use these exact names):
 - getFinancialHealth — overall health score and recommendations
 - getRevenueByClient — revenue breakdown by client
 
+ACTIONS (use these exact names to mutate data):
+- logExpense — params: description, amount, date
+- createInvoice — params: clientId (or null), dueDate, lineItems
+- recordRevenue — params: amount, type, source, clientId (or null)
+
 Given a user message, respond with a JSON object:
 {
   "queries": [{ "query": "<query_name>", "params": { ... } }],
+  "actions": [{ "action": "<action_name>", "params": { ... } }],
   "summary": "<brief natural language intro to preface the data>"
 }
 
 Rules:
-- Pick the most relevant 1-3 queries for the user's question
-- Use params to filter when the user specifies (e.g. status, date range, category)
-- If the user asks something you can't answer with these queries, use getFinancialHealth as default
+- Pick the most relevant 1-3 queries/actions for the user's question
+- Use params to filter or construct the resource
+- If the user asks something you can't answer with these, use getFinancialHealth as default
 - Always respond with valid JSON only, no markdown or explanation`;
 
 let geminiModel: ReturnType<GoogleGenerativeAI["getGenerativeModel"]> | null = null;
@@ -43,7 +50,8 @@ function getModel() {
 }
 
 export interface CopilotIntent {
-  queries: { query: string; params?: Record<string, unknown> }[];
+  queries?: { query: string; params?: Record<string, unknown> }[];
+  actions?: { action: string; params?: Record<string, unknown> }[];
   summary: string;
 }
 
@@ -66,10 +74,10 @@ export async function parseIntentWithAI(message: string): Promise<CopilotIntent 
     const cleaned = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
     const parsed = JSON.parse(cleaned) as CopilotIntent;
 
-    if (!parsed.queries || !Array.isArray(parsed.queries)) return null;
+    if (!parsed.queries && !parsed.actions) return null;
     return parsed;
   } catch (error) {
-    console.warn("[ai-provider] Gemini parse failed, falling back to keywords:", error);
+    log.warn("Gemini parse failed, falling back to keywords", { module: "ai-provider", action: "parseIntent", error: toLogError(error) });
     return null;
   }
 }
@@ -105,7 +113,7 @@ Format this into a helpful, concise markdown response. Use:
 
     return result.response.text().trim();
   } catch (error) {
-    console.warn("[ai-provider] Gemini format failed:", error);
+    log.warn("Gemini format failed", { module: "ai-provider", action: "formatResponse", error: toLogError(error) });
     return null;
   }
 }

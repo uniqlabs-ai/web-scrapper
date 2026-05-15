@@ -60,12 +60,30 @@ describe('GET /api/bank/transactions', () => {
     }));
   });
 
-  it('applies date range filters', async () => {
+  it('applies date range filters (both)', async () => {
     (mp.bankTransaction.findMany as any).mockResolvedValue([]);
     (mp.bankTransaction.count as any).mockResolvedValue(0);
     await GET(req('GET','http://localhost:3008/api/bank/transactions?startDate=2025-04-01&endDate=2025-04-30'));
     expect(mp.bankTransaction.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ date: expect.objectContaining({ gte: expect.any(Date), lte: expect.any(Date) }) }),
+    }));
+  });
+
+  it('applies date range filters (only startDate)', async () => {
+    (mp.bankTransaction.findMany as any).mockResolvedValue([]);
+    (mp.bankTransaction.count as any).mockResolvedValue(0);
+    await GET(req('GET','http://localhost:3008/api/bank/transactions?startDate=2025-04-01'));
+    expect(mp.bankTransaction.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ date: expect.objectContaining({ gte: expect.any(Date) }) }),
+    }));
+  });
+
+  it('applies date range filters (only endDate)', async () => {
+    (mp.bankTransaction.findMany as any).mockResolvedValue([]);
+    (mp.bankTransaction.count as any).mockResolvedValue(0);
+    await GET(req('GET','http://localhost:3008/api/bank/transactions?endDate=2025-04-30'));
+    expect(mp.bankTransaction.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ date: expect.objectContaining({ lte: expect.any(Date) }) }),
     }));
   });
 
@@ -96,6 +114,18 @@ describe('GET /api/bank/transactions', () => {
     }));
   });
 
+  it('returns paginated transactions with empty stats', async () => {
+    (mp.bankTransaction.findMany as any).mockResolvedValue([]);
+    (mp.bankTransaction.count as any).mockResolvedValue(0);
+    (mp.bankTransaction.groupBy as any).mockResolvedValue([]);
+
+    const res = await GET(req());
+    const d = await res.json();
+    expect(res.status).toBe(200);
+    expect(d.summary.totalDebit).toBe(0);
+    expect(d.summary.totalCredit).toBe(0);
+  });
+
   it('returns 500 on error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(req());
@@ -120,6 +150,14 @@ describe('PATCH /api/bank/transactions', () => {
     const res = await PATCH(req('PATCH','http://localhost:3008/api/bank/transactions',{ id:'bt-1', category:'X' }));
     expect(res.status).toBe(500);
   });
+
+  it('updates all fields of a transaction', async () => {
+    (mp.bankTransaction.update as any).mockResolvedValue({ id:'bt-1' });
+    const res = await PATCH(req('PATCH','http://localhost:3008/api/bank/transactions',{ 
+      id:'bt-1', vendor: 'V', isReconciled: true, notes: 'N' 
+    }));
+    expect(res.status).toBe(200);
+  });
 });
 
 describe('POST /api/bank/transactions', () => {
@@ -142,5 +180,15 @@ describe('POST /api/bank/transactions', () => {
       date:'2025-04-10', description:'Fail', amount:5000, type:'debit', bankAccountId:'ba-1',
     }));
     expect(res.status).toBe(500);
+  });
+
+  it('returns 500 on string error', async () => {
+    (mp.bankTransaction.create as any).mockRejectedValue('String error');
+    const res = await POST(req('POST','http://localhost:3008/api/bank/transactions',{
+      date:'2025-04-10', description:'Fail', amount:5000, type:'debit', bankAccountId:'ba-1',
+    }));
+    const d = await res.json();
+    expect(res.status).toBe(500);
+    expect(d.error).toBe('Failed to create transaction');
   });
 });

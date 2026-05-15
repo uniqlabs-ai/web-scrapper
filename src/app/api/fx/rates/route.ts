@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CURRENCIES, STATIC_RATES, convertToINR, calculateFxGainLoss } from "@/lib/currency";
+import { CURRENCIES, STATIC_RATES } from "@/lib/currency";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/fx/rates — Get exchange rates and conversion
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest) {
     const amount = Number(searchParams.get("amount") || 1);
 
     // Try to fetch live rates from a free API
-    let rates = { ...STATIC_RATES };
+    const rates = { ...STATIC_RATES };
     let isLive = false;
 
     try {
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error("FX rates error:", error);
+    log.error("FX rates error", { module: "fx", action: "rates", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to fetch rates" }, { status: 500 });
   }
 }

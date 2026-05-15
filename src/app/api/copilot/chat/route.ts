@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
 import { parseIntentWithAI, formatWithAI, isGeminiConfigured } from "@/lib/ai-provider";
+import { log, toLogError } from "@/lib/logger";
+import { CopilotChatSchema } from "@/lib/schemas";
 
 /**
  * POST /api/copilot/chat
@@ -144,16 +146,36 @@ async function fetchQueries(
   cookies: string,
   queries: { query: string; params?: Record<string, unknown> }[]
 ): Promise<Record<string, unknown>[]> {
+  if (!queries || queries.length === 0) return [];
   return Promise.all(
     queries.map(async ({ query, params }) => {
       try {
         const res = await fetch(`${baseUrl}/api/v1/copilot/query`, {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            cookie: cookies,
-          },
+          headers: { "content-type": "application/json", cookie: cookies },
           body: JSON.stringify({ query, params }),
+        });
+        return res.ok ? await res.json() : {};
+      } catch {
+        return {};
+      }
+    })
+  );
+}
+
+async function fetchActions(
+  baseUrl: string,
+  cookies: string,
+  actions: { action: string; params?: Record<string, unknown> }[]
+): Promise<Record<string, unknown>[]> {
+  if (!actions || actions.length === 0) return [];
+  return Promise.all(
+    actions.map(async ({ action, params }) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/v1/copilot/action`, {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie: cookies },
+          body: JSON.stringify({ action, params }),
         });
         return res.ok ? await res.json() : {};
       } catch {
@@ -165,8 +187,18 @@ async function fetchQueries(
 
 export async function POST(request: NextRequest) {
   try {
-    await getAuthUserId();
-    const { message } = await request.json();
+    await requireTenant();
+    const rawBody = await request.json();
+
+    const parsed = CopilotChatSchema.safeParse(rawBody);
+
+    if (!parsed.success) {
+
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
+
+    }
+
+    const { message } = parsed.data;
 
     if (!message || typeof message !== "string") {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
@@ -176,13 +208,15 @@ export async function POST(request: NextRequest) {
     const cookies = request.headers.get("cookie") || "";
 
     // Try Gemini AI first, fall back to keyword detection
-    let queries: { query: string; params?: Record<string, unknown> }[];
+    let queries: { query: string; params?: Record<string, unknown> }[] = [];
+    let actions: { action: string; params?: Record<string, unknown> }[] = [];
     let aiSummary: string | undefined;
 
     if (isGeminiConfigured()) {
       const aiIntent = await parseIntentWithAI(message);
       if (aiIntent) {
-        queries = aiIntent.queries;
+        queries = aiIntent.queries || [];
+        actions = aiIntent.actions || [];
         aiSummary = aiIntent.summary;
       } else {
         queries = detectQueriesByKeyword(message);
@@ -191,7 +225,9 @@ export async function POST(request: NextRequest) {
       queries = detectQueriesByKeyword(message);
     }
 
-    const results = await fetchQueries(baseUrl, cookies, queries);
+    const queryResults = await fetchQueries(baseUrl, cookies, queries);
+    const actionResults = await fetchActions(baseUrl, cookies, actions);
+    const results = [...queryResults, ...actionResults];
 
     // Try AI-formatted response, fall back to template-based
     let response: string;
@@ -202,13 +238,27 @@ export async function POST(request: NextRequest) {
       response = formatResponseFallback(results);
     }
 
+    // Action Intent Detection
+    let actionPayload: { type: string; label: string; url?: string; method?: string } | undefined;
+    const msgLower = message.toLowerCase();
+    if (msgLower.includes("email") || (msgLower.includes("remind") && msgLower.includes("overdue"))) {
+      actionPayload = { type: "api_call", label: "Send Follow-up Emails", url: "/api/invoices/remind", method: "GET" };
+    } else if (msgLower.includes("anomal") || msgLower.includes("scan")) {
+      actionPayload = { type: "api_call", label: "Run Anomaly Scan", url: "/api/anomalies", method: "GET" };
+    } else if (msgLower.includes("reconcil") || msgLower.includes("match")) {
+      actionPayload = { type: "api_call", label: "Run Auto-Reconciliation", url: "/api/reconciliation/auto-match", method: "POST" };
+    } else if (msgLower.includes("brief") || msgLower.includes("cfo")) {
+      actionPayload = { type: "api_call", label: "Send Weekly CFO Brief", url: "/api/cfo-brief", method: "POST" };
+    }
+
     return NextResponse.json({
       response,
+      action: actionPayload,
       sources: queries.map((q) => q.query),
       aiPowered: isGeminiConfigured(),
     });
   } catch (error) {
-    console.error("Copilot chat error:", error);
+    log.error("Copilot chat error", { module: "copilot", action: "chat", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to process query" }, { status: 500 });
   }
 }

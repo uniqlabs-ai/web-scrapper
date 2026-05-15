@@ -1,18 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { calculateLineItemTotal } from "@/lib/gst";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { logAudit } from "@/lib/audit";
+import { z } from "zod";
+import { log, toLogError } from "@/lib/logger";
+import { rateLimit } from "@/lib/rate-limit";
+
+const NextInvoiceSchema = z.object({
+  clientId: z.string().optional(),
+  dueDate: z.string().refine(v => !isNaN(Date.parse(v)), { message: "Invalid dueDate format" }),
+  notes: z.string().optional(),
+  gstNumber: z.string().optional(),
+  placeOfSupply: z.string().optional(),
+  isInterState: z.boolean().default(false),
+  lineItems: z.array(z.object({
+    description: z.string().min(1, "Description is required"),
+    quantity: z.number().min(0.01, "Quantity must be > 0"),
+    unitPrice: z.number().min(0, "Unit price cannot be negative"),
+    gstRate: z.number().min(0, "GST must be non-negative")
+  })).min(1, "At least one line item is required")
+});
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
 
-    const userId = await getAuthUserId();
-    const where: Record<string, unknown> = { userId };
+    const { userId, organizationId } = await requireTenant();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    
+    if (!user || !user.organizationId) {
+       return NextResponse.json({ invoices: [] });
+    }
+
+    const where: Record<string, unknown> = { organizationId: user.organizationId };
     if (status) where.status = status;
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    if (from || to) {
+      const d: Record<string, unknown> = {};
+      if (from) d.gte = new Date(from);
+      if (to) d.lte = new Date(to + "T23:59:59Z");
+      where.issueDate = d;
+    }
 
     const invoices = await prisma.invoice.findMany({
+      take: 500,
       where,
       include: { client: true, lineItems: true },
       orderBy: { createdAt: "desc" },
@@ -20,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ invoices });
   } catch (error) {
-    console.error("List invoices error:", error);
+    log.error("List invoices error", { module: "invoices", action: "handler", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to list invoices" },
       { status: 500 }
@@ -30,26 +64,32 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const limited = rateLimit(request, { windowSec: 60, max: 15, prefix: "invoices" });
+    if (limited) return limited;
+    const rawBody = await request.json();
+    const result = NextInvoiceSchema.safeParse(rawBody);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Invalid payload", details: result.error.issues },
+        { status: 400 }
+      );
+    }
+
     const {
       clientId,
       dueDate,
       notes,
       gstNumber,
       placeOfSupply,
-      isInterState = false,
-      lineItems = [],
-    } = body;
+      isInterState,
+      lineItems,
+    } = result.data;
 
-    if (!dueDate || lineItems.length === 0) {
-      return NextResponse.json(
-        { error: "dueDate and at least one lineItem are required" },
-        { status: 400 }
-      );
-    }
+    const { userId, organizationId } = await requireTenant();
 
     const count = await prisma.invoice.count({
-      where: { userId: await getAuthUserId() },
+      where: { organizationId },
     });
     const invoiceNumber = `INV-${String(count + 1).padStart(4, "0")}`;
 
@@ -87,29 +127,34 @@ export async function POST(request: NextRequest) {
 
     const total = Math.round((subtotal + taxTotal) * 100) / 100;
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        invoiceNumber,
-        userId: await getAuthUserId(),
-        clientId: clientId || undefined,
-        dueDate: new Date(dueDate),
-        subtotal,
-        taxTotal,
-        total,
-        notes,
-        gstNumber,
-        placeOfSupply,
-        isInterState,
-        lineItems: {
-          create: processedItems,
+    // RELIABILITY: Atomic transaction — invoice + line items created together
+    const invoice = await prisma.$transaction(async (tx) => {
+      return tx.invoice.create({
+        data: {
+          invoiceNumber,
+          userId,
+          organizationId,
+          clientId: clientId || undefined,
+          dueDate: new Date(dueDate),
+          subtotal,
+          taxTotal,
+          total,
+          notes,
+          gstNumber,
+          placeOfSupply,
+          isInterState,
+          lineItems: {
+            create: processedItems,
+          },
         },
-      },
-      include: { lineItems: true, client: true },
+        include: { lineItems: true, client: true },
+      });
     });
 
+    logAudit({ userId: invoice.userId, action: "create", resource: "invoice", resourceId: invoice.id, details: { invoiceNumber: invoice.invoiceNumber, total: invoice.total } });
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {
-    console.error("Create invoice error:", error);
+    log.error("Create invoice error", { module: "invoices", action: "handler", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to create invoice" },
       { status: 500 }

@@ -28,6 +28,7 @@ import { EmptyState } from "@/components/empty-state";
 
 import { TablePageSkeleton } from "@/components/page-skeleton";
 import { AccessibleModal } from "@/components/accessible-modal";
+import { StaggerContainer, SlideUp } from "@/components/animations";
 
 interface LineItem {
   description: string;
@@ -372,24 +373,32 @@ function InvoicesContent() {
       <DateRangeFilter onChange={setDateRange} />
 
       {/* Summary KPIs */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+      <StaggerContainer className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+        <SlideUp delay={0}>
         <div className="kpi-card amber">
           <div className="kpi-label">Outstanding</div>
           <div className="kpi-value" style={{ fontSize: 22 }}>{formatKpi(kpiOutstanding)}</div>
         </div>
+        </SlideUp>
+        <SlideUp delay={0.05}>
         <div className="kpi-card green">
           <div className="kpi-label">Collected</div>
           <div className="kpi-value" style={{ fontSize: 22 }}>{formatKpi(kpiPaid)}</div>
         </div>
+        </SlideUp>
+        <SlideUp delay={0.1}>
         <div className="kpi-card red">
           <div className="kpi-label">Overdue</div>
           <div className="kpi-value" style={{ fontSize: 22 }}>{overdueCount}</div>
         </div>
+        </SlideUp>
+        <SlideUp delay={0.15}>
         <div className="kpi-card purple">
           <div className="kpi-label">Total Invoices</div>
           <div className="kpi-value" style={{ fontSize: 22 }}>{invoices.length}</div>
         </div>
-      </div>
+        </SlideUp>
+      </StaggerContainer>
 
       {/* Follow-Up Pipeline */}
       {pipeline.length > 0 && (

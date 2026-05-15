@@ -65,11 +65,11 @@ describe('POST /api/webhooks/inbound-email', () => {
     expect(data.error).toContain('Invalid');
   });
 
-  it('returns 200 when email has no attachments (graceful ignore)', async () => {
+  it('returns 200 when email has no attachments (validation error, graceful 200)', async () => {
     const res = await POST(req(makePayload({ attachments: [] })));
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.message).toContain('No attachments');
+    expect(data.message).toBe('Validation failed');
   });
 
   it('returns 200 when email has null attachments', async () => {
@@ -97,14 +97,14 @@ describe('POST /api/webhooks/inbound-email', () => {
     process.env.GEMINI_API_KEY = original;
   });
 
-  it('returns 500 when body is invalid JSON', async () => {
+  it('returns 400 when body is invalid JSON', async () => {
     const badReq = new NextRequest(new URL('http://localhost:3008/api/webhooks/inbound-email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: 'not-json{{{',
     } as Record<string, unknown>);
     const res = await POST(badReq);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
   });
 
   it('returns 401 when signature header is missing', async () => {
@@ -115,5 +115,43 @@ describe('POST /api/webhooks/inbound-email', () => {
     } as Record<string, unknown>);
     const res = await POST(noSigReq);
     expect(res.status).toBe(401);
+  });
+
+  it('hits fallback branches when Gemini OCR returns missing fields', async () => {
+    // 1. Temporarily override process.env
+    process.env.GEMINI_API_KEY = 'test_key';
+    
+    // 2. Find sender user
+    mp.user.findFirst.mockResolvedValue({ id: 'u1', organizationId: 'org1' } as any);
+    
+    // 3. Prevent duplicate receipt
+    mp.receipt.findFirst.mockResolvedValue(null);
+    
+    // 4. Return incomplete JSON from Gemini
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const mGenerateContent = vi.fn().mockResolvedValue({
+      response: { text: () => '{}' } // empty JSON object
+    });
+    (GoogleGenerativeAI as any).mockImplementation(function() {
+      return { getGenerativeModel: () => ({ generateContent: mGenerateContent }) };
+    });
+    mp.receipt.create.mockResolvedValue({ id: 'rec1' } as any);
+    mp.expense.create.mockResolvedValue({ id: 'exp1' } as any);
+
+    const { log } = await import('@/lib/logger');
+    const res = await POST(req(makePayload()));
+    if (res.status !== 200) {
+      console.log('LOG ERROR ARGS:', JSON.stringify(vi.mocked(log.error).mock.calls, null, 2));
+    }
+    expect(res.status).toBe(200);
+
+    // Verify it used fallbacks
+    expect(mp.receipt.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ extractedAmount: null, extractedVendor: null, extractedCategory: null })
+    }));
+    
+    expect(mp.expense.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ amount: 0, vendor: 'Unknown Vendor', description: 'Bill from CCD' })
+    }));
   });
 });

@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { TrendingUp, ArrowUpRight, ArrowDownRight, Plus, X, Zap, Eye } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, ReferenceLine } from "recharts";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { ChartAccessibilityWrapper } from "@/components/chart-a11y-wrapper";
 
 interface MonthData {
@@ -136,6 +137,20 @@ export default function ForecastPage() {
         <div style={{ textAlign: "center", padding: 60, color: "var(--text-secondary)" }}>Loading forecast...</div>
       ) : (
         <>
+          {/* Empty state when no historical data */}
+          {historical.length === 0 && forecast.length === 0 && !metrics ? (
+            <EmptyState
+              icon={TrendingUp}
+              title="No forecast data available"
+              description="Import transactions and revenue to generate financial forecasts, scenario analysis, and runway projections."
+              action={
+                <a href="/import" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  Import Bank Statement
+                </a>
+              }
+            />
+          ) : (
+          <>
           {/* 30/60/90-Day Outlook */}
           {outlook.length > 0 && (
             <div style={{
@@ -490,6 +505,8 @@ export default function ForecastPage() {
               </div>
             )}
           </div>
+        </>
+          )}
         </>
       )}
     </div>

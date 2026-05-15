@@ -58,15 +58,19 @@ export default function HealthPage() {
 
   useEffect(() => {
     fetch("/api/health").then((r) => r.json()).then((data) => {
-      setScore(data.score || 0);
-      setGrade(data.grade || "?");
-      setGradeColor(data.gradeColor || "#666");
-      setFinancials(data.financials || null);
-      setTopCats(data.topCategories || []);
-      setRecs(data.recommendations || []);
-      setDataPoints(data.dataPoints || {});
+      if (data && !data.error) {
+        setScore(data.score || 0);
+        setGrade(data.grade || "?");
+        setGradeColor(data.gradeColor || "#666");
+        setFinancials(data.financials || null);
+        setTopCats(data.topCategories || []);
+        setRecs(data.recommendations || []);
+        setDataPoints(data.dataPoints || {});
+      }
     }).catch((err: unknown) => clientLog.error("Failed to load health data", "health", "load", err)).finally(() => setLoading(false));
-    fetch("/api/reports/cfo-brief").then((r) => r.json()).then((d) => setCfoBrief(d)).catch(() => {});
+    fetch("/api/reports/cfo-brief").then((r) => r.json()).then((d) => {
+      if (d && d.weekSummary && d.cashPosition) setCfoBrief(d);
+    }).catch(() => {});
   }, []);
 
   // Animated score counter
@@ -98,7 +102,7 @@ export default function HealthPage() {
       ) : (
         <>
           {/* Health Score + Grade */}
-          <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 24, marginBottom: 32 }}>
+          <div className="section-grid" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 24, marginBottom: 32 }}>
             {/* Score Circle */}
             <div style={{
               background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)",
@@ -151,7 +155,7 @@ export default function HealthPage() {
                   <div className="kpi-label"><Wallet size={14} /> Cash Position</div>
                   <div className="kpi-value" style={{ fontSize: 18 }}>{fmt(financials.totalCash)}</div>
                   <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
-                    {financials.runwayMonths} months runway
+                    {financials.runwayMonths == null ? "N/A" : financials.runwayMonths === "∞" || financials.runwayMonths === Infinity ? "∞" : financials.runwayMonths} months runway
                   </div>
                 </div>
                 <div className="kpi-card">
@@ -333,7 +337,7 @@ export default function HealthPage() {
           )}
 
           {/* Data Sources */}
-          <div style={{ display: "flex", gap: 12, padding: "12px 16px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border-color)", fontSize: 12, color: "var(--text-tertiary)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, padding: "12px 16px", background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border-color)", fontSize: 12, color: "var(--text-tertiary)" }}>
             <span><BarChart3 size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />Data used:</span>
             <span>{dataPoints.revenueMonths} revenue months</span>·
             <span>{dataPoints.expenseRecords} expenses</span>·

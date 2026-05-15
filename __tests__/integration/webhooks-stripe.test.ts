@@ -108,6 +108,42 @@ describe('POST /api/webhooks/stripe', () => {
     expect(d.duplicate).toBe(true);
   });
 
+  it('handles existing client for invoice event', async () => {
+    const stripe = new Stripe('sk_test', { apiVersion: '2024-12-18.acacia' as any });
+    vi.mocked(stripe.webhooks.constructEvent).mockReturnValue({
+      type: 'invoice.payment_succeeded',
+      data: {
+        object: { id: 'in_test_1234', customer: 'cus_1234', amount_paid: 10000, currency: 'usd', created: Math.floor(Date.now() / 1000), lines: { data: [] } },
+      },
+    } as any);
+
+    (mp.user.findFirst as any).mockResolvedValue({ id: 'admin-1', organizationId: 'org-1' });
+    (mp.revenue.findFirst as any).mockResolvedValue(null);
+    (mp.$transaction as any).mockImplementation(async (fn: any) => {
+      const tx = {
+        client: { findFirst: vi.fn().mockResolvedValue({ id: 'c-exist' }), create: vi.fn() },
+        revenue: { create: vi.fn() },
+      };
+      return fn(tx);
+    });
+
+    const res = await POST(req('sig_valid'));
+    expect(res.status).toBe(200);
+  });
+
+  it('throws error if admin user not found', async () => {
+    const stripe = new Stripe('sk_test', { apiVersion: '2024-12-18.acacia' as any });
+    vi.mocked(stripe.webhooks.constructEvent).mockReturnValue({
+      type: 'invoice.payment_succeeded',
+      data: { object: { id: 'in_test_1234' } },
+    } as any);
+
+    (mp.user.findFirst as any).mockResolvedValue(null); // no admin!
+
+    const res = await POST(req('sig_valid'));
+    expect(res.status).toBe(500);
+  });
+
   it('handles subscription.deleted event', async () => {
     const stripe = new Stripe('sk_test', { apiVersion: '2024-12-18.acacia' as any });
     vi.mocked(stripe.webhooks.constructEvent).mockReturnValue({
@@ -115,6 +151,81 @@ describe('POST /api/webhooks/stripe', () => {
       data: { object: { customer: 'cus_123' } },
     } as any);
     (mp.user.findFirst as any).mockResolvedValue({ id: 'admin-1', organizationId: 'org-1' });
+
+    const res = await POST(req('sig_valid'));
+    expect(res.status).toBe(200);
+  });
+
+  it('handles invoice with null customer_name and customer_email', async () => {
+    const stripe = new Stripe('sk_test', { apiVersion: '2024-12-18.acacia' as any });
+    vi.mocked(stripe.webhooks.constructEvent).mockReturnValue({
+      type: 'invoice.payment_succeeded',
+      data: {
+        object: {
+          id: 'in_null_names',
+          customer: 'cus_999',
+          customer_name: null,
+          customer_email: null,
+          amount_paid: 5000,
+          currency: 'usd',
+          number: null,
+          created: Math.floor(Date.now() / 1000),
+          lines: { data: [] },
+        },
+      },
+    } as any);
+    (mp.user.findFirst as any).mockResolvedValue({ id: 'admin-1', organizationId: 'org-1' });
+    (mp.revenue.findFirst as any).mockResolvedValue(null);
+    (mp.$transaction as any).mockImplementation(async (fn: any) => {
+      const tx = {
+        client: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'c-new' }) },
+        revenue: { create: vi.fn() },
+      };
+      return fn(tx);
+    });
+
+    const res = await POST(req('sig_valid'));
+    expect(res.status).toBe(200);
+  });
+
+  it('handles subscription.deleted with customer as object', async () => {
+    const stripe = new Stripe('sk_test', { apiVersion: '2024-12-18.acacia' as any });
+    vi.mocked(stripe.webhooks.constructEvent).mockReturnValue({
+      type: 'customer.subscription.deleted',
+      data: { object: { customer: { id: 'cus_obj_456' } } },
+    } as any);
+    (mp.user.findFirst as any).mockResolvedValue({ id: 'admin-1', organizationId: 'org-1' });
+
+    const res = await POST(req('sig_valid'));
+    expect(res.status).toBe(200);
+  });
+
+  it('handles invoice with customer as object', async () => {
+    const stripe = new Stripe('sk_test', { apiVersion: '2024-12-18.acacia' as any });
+    vi.mocked(stripe.webhooks.constructEvent).mockReturnValue({
+      type: 'invoice.payment_succeeded',
+      data: {
+        object: {
+          id: 'in_cust_obj',
+          customer: { id: 'cus_obj_789' },
+          customer_name: 'ObjCustomer',
+          customer_email: 'obj@test.com',
+          amount_paid: 2000,
+          currency: 'usd',
+          created: Math.floor(Date.now() / 1000),
+          lines: { data: [{ price: { type: 'one_time' } }] },
+        },
+      },
+    } as any);
+    (mp.user.findFirst as any).mockResolvedValue({ id: 'admin-1', organizationId: 'org-1' });
+    (mp.revenue.findFirst as any).mockResolvedValue(null);
+    (mp.$transaction as any).mockImplementation(async (fn: any) => {
+      const tx = {
+        client: { findFirst: vi.fn().mockResolvedValue({ id: 'c-exist' }), create: vi.fn() },
+        revenue: { create: vi.fn() },
+      };
+      return fn(tx);
+    });
 
     const res = await POST(req('sig_valid'));
     expect(res.status).toBe(200);

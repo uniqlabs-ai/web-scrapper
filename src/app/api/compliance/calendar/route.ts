@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
 import { getCurrentQuarter, TDS_QUARTERS } from "@/lib/tds";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/compliance/calendar — Upcoming deadlines and obligations
  */
 export async function GET() {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
 
@@ -25,7 +26,7 @@ export async function GET() {
     // GST deadlines: GSTR-3B due on 20th, GSTR-1 due on 11th
     for (let i = -1; i <= 3; i++) {
       const m = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      const monthLabel = m.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+      const _monthLabel = m.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
       const prevMonth = new Date(m.getFullYear(), m.getMonth() - 1, 1);
       const prevLabel = prevMonth.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
 
@@ -52,8 +53,8 @@ export async function GET() {
       });
     }
 
-    // TDS quarterly deadlines
-    const currentQ = getCurrentQuarter();
+    // TDS quarterly return deadlines
+    const _currentQ = getCurrentQuarter();
     for (const q of TDS_QUARTERS) {
       const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
       const qDates: Record<string, string> = {
@@ -70,6 +71,29 @@ export async function GET() {
         description: `Form 26Q/24Q filing for ${q.months}`,
         status: dueDate < today ? "overdue" : dueDate === today ? "due_today" : "upcoming",
         priority: dueDate < today ? "high" : "low",
+      });
+    }
+
+    // TDS monthly deposit deadlines (7th of following month; March exception: 30th April)
+    for (let i = -1; i <= 3; i++) {
+      const deductionMonth = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const deductionLabel = deductionMonth.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+
+      // March TDS has special deadline of 30th April; all others are 7th of next month
+      const isMarch = deductionMonth.getMonth() === 2; // 0-indexed: March = 2
+      const depositMonth = new Date(deductionMonth.getFullYear(), deductionMonth.getMonth() + 1, 1);
+      const depositDay = isMarch ? 30 : 7;
+      const depositDate = `${depositMonth.getFullYear()}-${String(depositMonth.getMonth() + 1).padStart(2, "0")}-${String(depositDay).padStart(2, "0")}`;
+
+      deadlines.push({
+        date: depositDate,
+        type: "TDS",
+        title: `TDS Deposit — ${deductionLabel}`,
+        description: isMarch
+          ? "TDS deducted in March — deposit by 30th April"
+          : `TDS challan payment for deductions in ${deductionLabel}`,
+        status: depositDate < today ? "overdue" : depositDate === today ? "due_today" : "upcoming",
+        priority: depositDate < today ? "high" : "medium",
       });
     }
 
@@ -95,6 +119,7 @@ export async function GET() {
     // Invoice due dates (next 30 days)
     const thirtyDaysLater = new Date(now.getTime() + 30 * 86400000);
     const dueInvoices = await prisma.invoice.findMany({
+      take: 10000,
       where: {
         userId,
         status: { in: ["sent", "overdue", "partial"] },
@@ -102,7 +127,6 @@ export async function GET() {
       },
       include: { client: { select: { name: true } } },
       orderBy: { dueDate: "asc" },
-      take: 10,
     });
 
     for (const inv of dueInvoices) {
@@ -130,7 +154,7 @@ export async function GET() {
       summary: { overdue, dueToday, upcoming, total: deadlines.length },
     });
   } catch (error) {
-    console.error("Compliance calendar error:", error);
+    log.error("Compliance calendar error", { module: "compliance", action: "calendar", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to load calendar" }, { status: 500 });
   }
 }

@@ -5,6 +5,7 @@ import { clientLog } from "@/lib/client-logger";
 import { useState, useEffect } from "react";
 import { Receipt, Calendar, Building2, CheckCircle2, Download } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface VendorTDS {
   vendor: string;
@@ -44,8 +45,10 @@ export default function TDSPage() {
       const qs = q ? `?quarter=${q}` : "";
       const res = await fetch(`/api/tds${qs}`);
       const d = await res.json();
-      setData(d);
-      if (!q) setSelectedQ(d.currentQuarter?.quarter || "Q1");
+      if (d && !d.error) {
+        setData(d);
+        if (!q) setSelectedQ(d.currentQuarter?.quarter || "Q1");
+      }
     } catch (err) {
       clientLog.error("Failed to load TDS data", "tds", "load", err);
     } finally {
@@ -141,16 +144,16 @@ export default function TDSPage() {
 
       {/* Vendor-wise TDS Table */}
       {data.vendors.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: 60, background: "var(--bg-card)",
-          borderRadius: 16, border: "1px solid var(--border-color)",
-        }}>
-          <CheckCircle2 size={40} style={{ color: "#22C55E", marginBottom: 12 }} />
-          <h3 style={{ margin: "0 0 8px" }}>No TDS-applicable payments this quarter</h3>
-          <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-            Professional services, rent, and contractor payments will appear here
-          </p>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          title="No TDS-applicable payments this quarter"
+          description="Professional services, rent, and contractor payments will appear here when recorded."
+          action={
+            <a href="/expenses" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+              Record Expense
+            </a>
+          }
+        />
       ) : (
         <div className="table-container">
           <div className="table-header">

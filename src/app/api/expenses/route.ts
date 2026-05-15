@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { logAudit } from "@/lib/audit";
+import { z } from "zod";
+import { log, toLogError } from "@/lib/logger";
+import { rateLimit } from "@/lib/rate-limit";
+
+const NextExpenseSchema = z.object({
+  description: z.string().min(1, "Description is required"),
+  amount: z.number().min(0, "Amount must be positive"),
+  date: z.string().optional(),
+  vendor: z.string().optional(),
+  notes: z.string().optional(),
+  categoryId: z.string().optional(),
+  accountId: z.string().optional(),
+  isRecurring: z.boolean().default(false)
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,8 +24,8 @@ export async function GET(request: NextRequest) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
 
-    const userId = await getAuthUserId();
-    const where: Record<string, unknown> = { userId };
+    const { userId, organizationId } = await requireTenant();
+    const where: Record<string, unknown> = { organizationId, userId };
     if (categoryId) where.categoryId = categoryId;
     if (from || to) {
       where.date = {};
@@ -19,6 +34,7 @@ export async function GET(request: NextRequest) {
     }
 
     const expenses = await prisma.expense.findMany({
+      take: 500, // RELIABILITY: Query boundary — prevents OOM on large datasets
       where,
       include: { category: true, account: true },
       orderBy: { date: "desc" },
@@ -26,48 +42,64 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ expenses });
   } catch (error) {
-    console.error("List expenses error:", error);
+    log.error("List expenses error", { module: "expenses", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to list expenses" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { description, amount, date, vendor, notes, categoryId, accountId, isRecurring } = body;
+    const limited = rateLimit(request, { windowSec: 60, max: 20, prefix: "expenses" });
+    if (limited) return limited;
+    const rawBody = await request.json();
+    const result = NextExpenseSchema.safeParse(rawBody);
 
-    if (!description || !amount) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: "description and amount are required" },
+        { error: "Invalid payload", details: result.error.issues },
         { status: 400 }
       );
     }
 
-    const expense = await prisma.expense.create({
-      data: {
-        userId: await getAuthUserId(),
-        description,
-        amount,
-        date: date ? new Date(date) : new Date(),
-        vendor,
-        notes,
-        categoryId: categoryId || undefined,
-        accountId: accountId || undefined,
-        isRecurring: isRecurring || false,
-      },
-      include: { category: true },
+    const { description, amount, date, vendor, notes, categoryId, accountId, isRecurring } = result.data;
+
+    // RELIABILITY: Atomic transaction — expense creation + balance decrement must succeed or fail together
+    const expense = await prisma.$transaction(async (tx) => {
+      const { userId, organizationId } = await requireTenant();
+
+      const exp = await tx.expense.create({
+        data: {
+          userId,
+          organizationId,
+          description,
+          amount,
+          date: date ? new Date(date) : new Date(),
+          vendor,
+          notes,
+          categoryId: categoryId || undefined,
+          accountId: accountId || undefined,
+          isRecurring: isRecurring || false,
+        },
+        include: { category: true },
+      });
+
+      if (accountId) {
+        await tx.account.update({
+          where: { id: accountId },
+          data: { currentBalance: { decrement: amount } },
+        });
+      }
+
+      return exp;
     });
 
-    if (accountId) {
-      await prisma.account.update({
-        where: { id: accountId },
-        data: { currentBalance: { decrement: amount } },
-      });
-    }
-
+    logAudit({ userId: expense.userId, action: "create", resource: "expense", resourceId: expense.id, details: { description: expense.description, amount: expense.amount } });
     return NextResponse.json({ expense }, { status: 201 });
   } catch (error) {
-    console.error("Create expense error:", error);
+    if (error instanceof TenantError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    log.error("Create expense error", { module: "expenses", action: "create", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to create expense" }, { status: 500 });
   }
 }

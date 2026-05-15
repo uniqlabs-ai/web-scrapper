@@ -130,7 +130,7 @@ describe('POST /api/billing/webhook', () => {
   });
 
   it('handles non-payment.captured events', async () => {
-    const event = { event: 'order.paid', payload: {} };
+    const event = { event: 'order.paid' };
     const body = JSON.stringify(event);
     const sig = signBody(body);
 

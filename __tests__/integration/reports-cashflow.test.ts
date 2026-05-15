@@ -7,6 +7,10 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 vi.mock('@/lib/tenant', () => ({ requireTenant: vi.fn(), TenantError: class extends Error { constructor(m:string){super(m);this.name='TenantError'} } }));
+vi.mock('@/lib/financial-intelligence', () => ({
+  projectCashFlow: vi.fn().mockResolvedValue({ projectedRunway: 12, monthlyProjection: [] }),
+  projectCashFlowOutlook: vi.fn().mockResolvedValue({ status: 'healthy', months: [] }),
+}));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
 
 import { prisma } from '@/lib/prisma';
@@ -36,9 +40,26 @@ describe('GET /api/reports/cashflow', () => {
     expect(data).toBeDefined();
   });
 
+  it('handles GET outlook view successfully', async () => {
+    const res = await GET(req('GET', undefined, 'http://localhost:3008/api/reports/cashflow?view=outlook'));
+    expect(res.status).toBeLessThan(600);
+    const data = await res.json();
+    expect(data).toBeDefined();
+  });
+
   it('handles tenant error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(req());
     expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('handles custom months parameter', async () => {
+    const res = await GET(req('GET', undefined, 'http://localhost:3008/api/reports/cashflow?months=12'));
+    expect(res.status).toBe(200);
+  });
+
+  it('caps months at 24', async () => {
+    const res = await GET(req('GET', undefined, 'http://localhost:3008/api/reports/cashflow?months=50'));
+    expect(res.status).toBe(200);
   });
 });

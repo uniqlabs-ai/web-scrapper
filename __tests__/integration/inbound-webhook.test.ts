@@ -5,6 +5,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     expense: { create: vi.fn(), findFirst: vi.fn() },
     revenue: { create: vi.fn(), findFirst: vi.fn() },
+    user: { findUnique: vi.fn() },
   },
 }));
 vi.mock('@/lib/webhooks', () => ({ verifyWebhookSignature: vi.fn() }));
@@ -18,7 +19,7 @@ import { mockPrisma } from '../helpers/prisma-mock';
 const mp = mockPrisma(prisma);
 const mv = vi.mocked(verifyWebhookSignature);
 
-beforeEach(() => { vi.clearAllMocks(); mv.mockReturnValue(true); });
+beforeEach(() => { vi.clearAllMocks(); mv.mockReturnValue(true); (mp.user?.findUnique as any)?.mockResolvedValue({ organizationId: 'org-1' }); });
 
 function req(body: unknown, sig = 'valid-sig'): NextRequest {
   return new NextRequest(new URL('http://localhost:3008/api/v1/webhooks/inbound'), {
@@ -117,5 +118,95 @@ describe('POST /api/v1/webhooks/inbound', () => {
       data: { salary: 100, candidateName: 'X', userId: 'u1', offerId: 'o' },
     }));
     expect([401, 500]).toContain(res.status);
+  });
+
+  it('rejects missing signature header', async () => {
+    mv.mockReturnValue(false);
+    const request = new NextRequest(new URL('http://localhost:3008/api/v1/webhooks/inbound'), {
+      method: 'POST',
+      body: JSON.stringify({ productId: 'hiring', event: 'test' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(request);
+    expect(res.status).toBe(401);
+  });
+
+  it('handles missing data fields for offer.accepted', async () => {
+    mp.expense.findFirst.mockResolvedValue(null);
+    mp.expense.create.mockResolvedValue({} as any);
+    const res = await POST(req({
+      productId: 'hiring', event: 'offer.accepted',
+      summary: 'New hire', timestamp: new Date().toISOString(),
+      data: { offerId: 'off-2' }, // missing salary, candidateName, userId
+    }));
+    const d = await res.json();
+    expect(d.processed.amount).toBe(0);
+  });
+
+  it('handles missing data fields for deal.closed', async () => {
+    mp.revenue.findFirst.mockResolvedValue(null);
+    mp.revenue.create.mockResolvedValue({} as any);
+    const res = await POST(req({
+      productId: 'uniqlabs', event: 'deal.closed',
+      summary: 'New deal', timestamp: new Date().toISOString(),
+      data: { dealId: 'd-2' }, // missing dealValue, recurring
+    }));
+    const d = await res.json();
+    expect(d.processed.amount).toBe(0);
+    expect(mp.revenue.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ type: 'one-time' })
+    }));
+  });
+
+  it('handles missing data fields for campaign.launched', async () => {
+    mp.expense.findFirst.mockResolvedValue(null);
+    mp.expense.create.mockResolvedValue({} as any);
+    const res = await POST(req({
+      productId: 'gtm', event: 'campaign.launched',
+      summary: 'Campaign', timestamp: new Date().toISOString(),
+      data: { campaignId: 'c-2' }, // missing budget
+    }));
+    const d = await res.json();
+    expect(d.processed.amount).toBe(0);
+  });
+
+  it('handles missing data fields for subscription.renewed', async () => {
+    mp.revenue.findFirst.mockResolvedValue(null);
+    mp.revenue.create.mockResolvedValue({} as any);
+    const res = await POST(req({
+      productId: 'saas', event: 'subscription.renewed',
+      summary: 'Renewal', timestamp: new Date().toISOString(),
+      data: { subscriptionId: 'sub-2' }, // missing amount
+    }));
+    const d = await res.json();
+    expect(d.processed.amount).toBe(0);
+  });
+
+  it('skips duplicate for offer.accepted', async () => {
+    mp.expense.findFirst.mockResolvedValue({ id: 'exp-1' } as any);
+    const res = await POST(req({ productId: 'hiring', event: 'offer.accepted', summary: '', timestamp: '', data: { offerId: 'off-1' } }));
+    const d = await res.json();
+    expect(d.processed.action).toBe('duplicate.skipped');
+  });
+
+  it('skips duplicate for deal.closed', async () => {
+    mp.revenue.findFirst.mockResolvedValue({ id: 'rev-1' } as any);
+    const res = await POST(req({ productId: 'uniqlabs', event: 'deal.closed', summary: '', timestamp: '', data: { dealId: 'd-1' } }));
+    const d = await res.json();
+    expect(d.processed.action).toBe('duplicate.skipped');
+  });
+
+  it('skips duplicate for campaign.launched', async () => {
+    mp.expense.findFirst.mockResolvedValue({ id: 'exp-2' } as any);
+    const res = await POST(req({ productId: 'gtm', event: 'campaign.launched', summary: '', timestamp: '', data: { campaignId: 'c-1' } }));
+    const d = await res.json();
+    expect(d.processed.action).toBe('duplicate.skipped');
+  });
+
+  it('skips duplicate for subscription.renewed', async () => {
+    mp.revenue.findFirst.mockResolvedValue({ id: 'rev-2' } as any);
+    const res = await POST(req({ productId: 'saas', event: 'subscription.renewed', summary: '', timestamp: '', data: { subscriptionId: 's-1' } }));
+    const d = await res.json();
+    expect(d.processed.action).toBe('duplicate.skipped');
   });
 });

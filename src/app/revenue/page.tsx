@@ -8,6 +8,7 @@ import { DateRangeFilter } from "@/components/date-range-filter";
 import { formatCurrency } from "@/lib/currency";
 import { RevenueDetailDrawer } from "@/components/item-detail-drawer";
 import { EmptyState } from "@/components/empty-state";
+import { StaggerContainer, SlideUp } from "@/components/animations";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, ColumnDef } from "@/components/data-table";
 import { AccessibleModal } from "@/components/accessible-modal";
@@ -300,12 +301,15 @@ export default function RevenuePage() {
       {/* TAB: Overview */}
       {activeTab === "overview" && (
         <div>
-          <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
+          <StaggerContainer className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
+            <SlideUp delay={0}>
             <div className="kpi-card green">
               <div className="kpi-icon green"><DollarSign size={20} /></div>
               <div className="kpi-label">{hasActiveFilters ? "Filtered Revenue" : "Total Revenue"}</div>
               <div className="kpi-value" style={{ fontSize: 24 }}>{formatCurrency(totalRevenue)}</div>
             </div>
+            </SlideUp>
+            <SlideUp delay={0.05}>
             <div className="kpi-card purple">
               <div className="kpi-icon purple"><TrendingUp size={20} /></div>
               <div className="kpi-label">Current MRR</div>
@@ -317,11 +321,15 @@ export default function RevenuePage() {
                 </span>
               )}
             </div>
+            </SlideUp>
+            <SlideUp delay={0.1}>
             <div className="kpi-card blue">
               <div className="kpi-icon blue"><BarChart3 size={20} /></div>
               <div className="kpi-label">Current ARR</div>
               <div className="kpi-value" style={{ fontSize: 24 }}>{formatCurrency(currentARR)}</div>
             </div>
+            </SlideUp>
+            <SlideUp delay={0.15}>
             <div className="kpi-card amber">
               <div className="kpi-label">One-Time Revenue</div>
               <div className="kpi-value" style={{ fontSize: 24 }}>{formatCurrency(oneTimeRevenue)}</div>
@@ -329,7 +337,8 @@ export default function RevenuePage() {
                 {filteredRevenues.length} records · {cats.length} categories
               </div>
             </div>
-          </div>
+            </SlideUp>
+          </StaggerContainer>
 
           {topCategory && (
             <div style={{
@@ -402,7 +411,7 @@ export default function RevenuePage() {
         <div className="table-container" style={{ padding: 24 }}>
           <h3 style={{ marginBottom: 20 }}>Revenue Breakdown by Category</h3>
           {cats.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 32, alignItems: "center" }}>
+            <div className="section-grid" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 32, alignItems: "center" }}>
               <div style={{
                 width: 200, height: 200, borderRadius: "50%", margin: "0 auto",
                 background: `conic-gradient(${gradientParts.join(", ")})`,

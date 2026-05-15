@@ -1,74 +1,94 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const AuditLogSchema = z.object({
+  action: z.enum(["create", "update", "delete", "import", "export", "login", "process"]),
+  resource: z.string().min(1).max(100),
+  resourceId: z.string().max(200).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
+});
 
 /**
- * GET /api/audit — Activity log
- * POST /api/audit — Log an action
+ * GET /api/audit — Paginated audit log from DB
+ * POST /api/audit — Log an action (internal use)
  */
-
-interface AuditEntry {
-  action: string;
-  resource: string;
-  resourceId?: string;
-  details?: string;
-  userId: string;
-  timestamp: Date;
-}
-
-// In-memory audit log (in production, this would be a DB table)
-const auditLog: AuditEntry[] = [];
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
-    const limit = Number(searchParams.get("limit") || 50);
+    const limit = Math.min(Number(searchParams.get("limit") || 50), 200);
+    const offset = Number(searchParams.get("offset") || 0);
     const resource = searchParams.get("resource");
+    const action = searchParams.get("action");
 
-    let entries = auditLog.filter((e) => true); // All for now
-    if (resource) entries = entries.filter((e) => e.resource === resource);
+    const where: Record<string, unknown> = { userId };
+    if (resource) where.resource = resource;
+    if (action) where.action = action;
 
-    entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    entries = entries.slice(0, limit);
+    const [entries, total] = await Promise.all([
+      prisma.auditLog.findMany({
+      take: 500,
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: offset,
+        select: {
+          id: true,
+          action: true,
+          resource: true,
+          resourceId: true,
+          details: true,
+          createdAt: true,
+        },
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
 
     return NextResponse.json({
       entries: entries.map((e) => ({
+        id: e.id,
         action: e.action,
         resource: e.resource,
         resourceId: e.resourceId,
-        details: e.details,
-        timestamp: e.timestamp.toISOString(),
+        details: e.details ? JSON.parse(e.details) : null,
+        timestamp: e.createdAt.toISOString(),
       })),
-      total: auditLog.length,
+      total,
+      limit,
+      offset,
     });
   } catch (error) {
-    console.error("Audit error:", error);
+    log.error("Audit GET error", { module: "audit", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
-    const body = await request.json();
-    const { action, resource, resourceId, details } = body;
+    const { userId, organizationId } = await requireTenant();
+    const rawBody = await request.json();
+    const parsed = AuditLogSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
+    }
+    const { action, resource, resourceId, details } = parsed.data;
 
-    auditLog.push({
-      action,
-      resource,
-      resourceId,
-      details,
-      userId,
-      timestamp: new Date(),
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action,
+        resource,
+        resourceId,
+        details: details ? JSON.stringify(details) : null,
+      },
     });
-
-    // Keep last 1000 entries
-    if (auditLog.length > 1000) auditLog.splice(0, auditLog.length - 1000);
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Audit log error:", error);
+    log.error("Audit POST error", { module: "audit", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

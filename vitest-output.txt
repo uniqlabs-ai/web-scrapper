@@ -1,0 +1,205 @@
+
+ RUN  v4.1.6 /Users/nidishramakrishnan/Work/founderOS/finance
+
+stderr | __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > GET > returns 500 on unexpected error
+TEST LOG ERROR: Error: fail
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:46:28
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+stderr | __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > POST > creates recurring expense fast-forwarding start date
+TypeError: Value is not JSON serializable
+    at serializeJavascriptValueToJSONString (node:internal/deps/undici/undici:4460:15)
+    at Function.json (node:internal/deps/undici/undici:9084:11)
+    at Function.json (/Users/nidishramakrishnan/Work/founderOS/finance/node_modules/next/dist/server/web/spec-extension/response.js:95:35)
+    at Module.POST (/Users/nidishramakrishnan/Work/founderOS/finance/src/app/api/recurring-expenses/route.ts:128:25)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:70:19
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+TEST LOG ERROR: TypeError: Value is not JSON serializable
+    at serializeJavascriptValueToJSONString (node:internal/deps/undici/undici:4460:15)
+    at Function.json (node:internal/deps/undici/undici:9084:11)
+    at Function.json (/Users/nidishramakrishnan/Work/founderOS/finance/node_modules/next/dist/server/web/spec-extension/response.js:95:35)
+    at Module.POST (/Users/nidishramakrishnan/Work/founderOS/finance/src/app/api/recurring-expenses/route.ts:128:25)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:70:19
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > POST > returns 500 on unexpected error
+Error: fail
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:76:28
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+TEST LOG ERROR: Error: fail
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:76:28
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+stderr | __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > PUT > returns 500 on unexpected error
+TEST LOG ERROR: Error: fail
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:104:67
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+stderr | __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > DELETE > soft deletes successfully
+TEST LOG ERROR: Error: fail
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:104:67
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+stderr | __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > DELETE > returns 500 on unexpected error
+TEST LOG ERROR: Error: fail
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:141:70
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+stderr | __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > PATCH > processes due recurring expenses successfully
+TEST LOG ERROR: Error: fail
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:104:67
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+stderr | __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > PATCH > returns 500 on unexpected error
+TEST LOG ERROR: Error: fail
+    at /Users/nidishramakrishnan/Work/founderOS/finance/__tests__/integration/recurring-expenses-deep.test.ts:168:28
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/nidishramakrishnan/Work/founderOS/finance/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+ ❯ __tests__/integration/recurring-expenses-deep.test.ts (15 tests | 3 failed) 23ms
+       ✓ returns recurring expenses successfully 4ms
+       ✓ returns 500 on unexpected error 3ms
+       ✓ returns 400 for invalid payload 3ms
+       × creates recurring expense fast-forwarding start date 5ms
+       ✓ returns 500 on unexpected error 1ms
+       ✓ returns 400 if ID is missing 1ms
+       ✓ toggles active state successfully 1ms
+       ✓ returns 500 on unexpected error 1ms
+       ✓ returns guard response if permission denied 1ms
+       ✓ returns 400 if ID is missing 0ms
+       ✓ returns 404 if not found 1ms
+       × soft deletes successfully 1ms
+       ✓ returns 500 on unexpected error 0ms
+       × processes due recurring expenses successfully 1ms
+       ✓ returns 500 on unexpected error 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > POST > creates recurring expense fast-forwarding start date
+AssertionError: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ __tests__/integration/recurring-expenses-deep.test.ts:71:26
+     69|
+     70|       const res = await POST(makeReq({ description: 'Test', amount: 10…
+     71|       expect(res.status).toBe(201);
+       |                          ^
+     72|       expect(prisma.recurringExpense.create).toHaveBeenCalled();
+     73|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > DELETE > soft deletes successfully
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ __tests__/integration/recurring-expenses-deep.test.ts:136:26
+    134|       vi.mocked(prisma.recurringExpense.findFirst).mockResolvedValue({…
+    135|       const res = await DELETE(makeReq('re-1'));
+    136|       expect(res.status).toBe(200);
+       |                          ^
+    137|       expect(prisma.recurringExpense.update).toHaveBeenCalled();
+    138|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  __tests__/integration/recurring-expenses-deep.test.ts > /api/recurring-expenses > PATCH > processes due recurring expenses successfully
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ __tests__/integration/recurring-expenses-deep.test.ts:160:26
+    158|
+    159|       const res = await PATCH(makeReq());
+    160|       expect(res.status).toBe(200);
+       |                          ^
+    161|       const data = await res.json();
+    162|       expect(data.processed).toBe(3);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 12 passed (15)
+   Start at  09:53:55
+   Duration  255ms (transform 52ms, setup 0ms, import 128ms, tests 23ms, environment 0ms)
+

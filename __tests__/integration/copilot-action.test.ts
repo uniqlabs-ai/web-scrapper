@@ -116,4 +116,93 @@ describe('POST /api/v1/copilot/action', () => {
     const res = await POST(req({ action: 'logExpense', params: { description:'X', amount:1 } }));
     expect(res.status).toBe(401);
   });
+
+  it('creates invoice with clientId, notes, isInterState and without gstRate', async () => {
+    (mp.invoice.count as any).mockResolvedValue(0);
+    (mp.invoice.create as any).mockResolvedValue({ id:'inv-full', invoiceNumber:'INV-0001', lineItems:[] });
+    const res = await POST(req({
+      action: 'createInvoice',
+      params: {
+        clientId: 'c-1',
+        dueDate: '2025-06-01',
+        notes: 'Custom notes',
+        isInterState: true,
+        lineItems: [
+          { description:'Service A', quantity:2, unitPrice:5000 }, // no gstRate → default 18
+        ],
+      },
+    }));
+    expect(res.status).toBe(200);
+  });
+
+  it('logs expense with accountId and updates account balance', async () => {
+    (mp.expense.create as any).mockResolvedValue({ id:'exp-acct' });
+    (mp.account.update as any).mockResolvedValue({});
+    const res = await POST(req({
+      action: 'logExpense',
+      params: {
+        description: 'Office Rent',
+        amount: 50000,
+        date: '2025-04-01',
+        vendor: 'WeWork',
+        notes: 'Monthly rent',
+        categoryId: 'cat-office',
+        accountId: 'acct-1',
+        isRecurring: true,
+      },
+    }));
+    expect(res.status).toBe(200);
+    expect(mp.account.update).toHaveBeenCalled();
+  });
+
+  it('logs expense without date (defaults to now)', async () => {
+    (mp.expense.create as any).mockResolvedValue({ id:'exp-nodate' });
+    const res = await POST(req({
+      action: 'logExpense',
+      params: { description: 'Coffee', amount: 200 },
+    }));
+    expect(res.status).toBe(200);
+    expect(mp.account.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for logExpense without description', async () => {
+    const res = await POST(req({
+      action: 'logExpense',
+      params: { amount: 100 },
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  it('records revenue with source and clientId', async () => {
+    (mp.revenue.create as any).mockResolvedValue({ id:'rev-full' });
+    const res = await POST(req({
+      action: 'recordRevenue',
+      params: {
+        amount: 100000,
+        type: 'one-time',
+        source: 'Consulting',
+        clientId: 'c-2',
+      },
+    }));
+    expect(res.status).toBe(200);
+  });
+
+  it('records revenue without month (defaults to now)', async () => {
+    (mp.revenue.create as any).mockResolvedValue({ id:'rev-nomonth' });
+    const res = await POST(req({
+      action: 'recordRevenue',
+      params: { amount: 50000, type: 'recurring' },
+    }));
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 500 on unexpected error', async () => {
+    mt.mockRejectedValue(new Error('fail'));
+    const { extractFounderOSToken } = await import('@/lib/founder-os-jwt');
+    vi.mocked(extractFounderOSToken).mockReturnValue({ sub: 'u1' } as any);
+    (mp.expense.create as any).mockRejectedValue(new Error('DB error'));
+    const res = await POST(req({ action: 'logExpense', params: { description:'X', amount:1 } }));
+    expect(res.status).toBe(500);
+  });
 });
+

@@ -88,6 +88,41 @@ describe('POST /api/reconciliation/auto', () => {
     expect(d.pendingReview[0].matchType).toBe('revenue');
   });
 
+  it('matches debit with fuzzy amount within 2% and day diff <= 1', async () => {
+    const date = new Date('2025-04-15');
+    (mp.bankTransaction.findMany as any).mockResolvedValue([
+      { id:'txn-fuzzy', amount:1000, description:'AWS', date, type:'debit', isReconciled:false },
+    ]);
+    (mp.expense.findMany as any).mockResolvedValue([
+      { id:'exp-fuzzy', amount:1015, description:'AWS', date, category:null },
+    ]);
+    (mp.invoice.findMany as any).mockResolvedValue([]);
+    (mp.revenue.findMany as any).mockResolvedValue([]);
+
+    const res = await POST();
+    const d = await res.json();
+    expect(d.pendingReview).toHaveLength(1);
+    expect(d.pendingReview[0].confidence).toBe(0.7);
+  });
+
+  it('matches debit with exact amount but day diff between 4 and 7 and desc match', async () => {
+    const txnDate = new Date('2025-04-20');
+    const expDate = new Date('2025-04-15'); // 5 days diff
+    (mp.bankTransaction.findMany as any).mockResolvedValue([
+      { id:'txn-desc', amount:500, description:'software subscription', date:txnDate, type:'debit', isReconciled:false },
+    ]);
+    (mp.expense.findMany as any).mockResolvedValue([
+      { id:'exp-desc', amount:500, description:'Software Sub', date:expDate, category:null },
+    ]);
+    (mp.invoice.findMany as any).mockResolvedValue([]);
+    (mp.revenue.findMany as any).mockResolvedValue([]);
+
+    const res = await POST();
+    const d = await res.json();
+    expect(d.pendingReview).toHaveLength(1);
+    expect(d.pendingReview[0].confidence).toBe(0.75); // descMatch is true
+  });
+
   it('no matches when amounts differ significantly', async () => {
     (mp.bankTransaction.findMany as any).mockResolvedValue([
       { id:'txn-4', amount:50000, description:'Payment', date:new Date(), type:'debit', isReconciled:false },
@@ -101,6 +136,78 @@ describe('POST /api/reconciliation/auto', () => {
     const res = await POST();
     const d = await res.json();
     expect(d.pendingReview).toHaveLength(0);
+  });
+
+  it('matches credit to invoice with client name match in desc and exact amount', async () => {
+    const txnDate = new Date('2025-04-20');
+    (mp.bankTransaction.findMany as any).mockResolvedValue([
+      { id:'txn-client', amount:100, description:'from microsoft', date:txnDate, type:'credit', isReconciled:false },
+    ]);
+    (mp.expense.findMany as any).mockResolvedValue([]);
+    (mp.invoice.findMany as any).mockResolvedValue([
+      { id:'inv-client', total:100, invoiceNumber:'INV-1', issueDate:new Date('2025-03-01'), client:{ name:'Microsoft Corp' }, payments:[] },
+    ]);
+    (mp.revenue.findMany as any).mockResolvedValue([]);
+
+    const res = await POST();
+    const d = await res.json();
+    expect(d.pendingReview).toHaveLength(1);
+    expect(d.pendingReview[0].confidence).toBe(0.9);
+  });
+
+  it('matches credit to invoice with day diff between 7 and 30', async () => {
+    const txnDate = new Date('2025-04-20');
+    const invDate = new Date('2025-04-05'); // 15 days diff
+    (mp.bankTransaction.findMany as any).mockResolvedValue([
+      { id:'txn-inv15', amount:100, description:'deposit', date:txnDate, type:'credit', isReconciled:false },
+    ]);
+    (mp.expense.findMany as any).mockResolvedValue([]);
+    (mp.invoice.findMany as any).mockResolvedValue([
+      { id:'inv-15', total:100, invoiceNumber:'INV-1', issueDate:invDate, client:{ name:'Other' }, payments:[] },
+    ]);
+    (mp.revenue.findMany as any).mockResolvedValue([]);
+
+    const res = await POST();
+    const d = await res.json();
+    expect(d.pendingReview).toHaveLength(1);
+    expect(d.pendingReview[0].confidence).toBe(0.7);
+  });
+
+  it('matches credit to revenue with day diff between 7 and 30 and no category', async () => {
+    const txnDate = new Date('2025-04-20');
+    const revDate = new Date('2025-04-05'); // 15 days diff
+    (mp.bankTransaction.findMany as any).mockResolvedValue([
+      { id:'txn-rev15', amount:100, description:'consulting fee', date:txnDate, type:'credit', isReconciled:false },
+    ]);
+    (mp.expense.findMany as any).mockResolvedValue([]);
+    (mp.invoice.findMany as any).mockResolvedValue([]);
+    (mp.revenue.findMany as any).mockResolvedValue([
+      { id:'rev-15', amount:100, month:revDate, source:null, category:null },
+    ]);
+
+    const res = await POST();
+    const d = await res.json();
+    expect(d.pendingReview).toHaveLength(1);
+    expect(d.pendingReview[0].confidence).toBe(0.65);
+    expect(d.pendingReview[0].suggestedCategory).toBe('Consulting');
+  });
+
+  it('matches credit to revenue fuzzy amount within 5% and day diff <= 7', async () => {
+    const txnDate = new Date('2025-04-20');
+    const revDate = new Date('2025-04-18');
+    (mp.bankTransaction.findMany as any).mockResolvedValue([
+      { id:'txn-fuzzy-rev', amount:103, description:'salary interest commission software service rent', date:txnDate, type:'credit', isReconciled:false },
+    ]);
+    (mp.expense.findMany as any).mockResolvedValue([]);
+    (mp.invoice.findMany as any).mockResolvedValue([]);
+    (mp.revenue.findMany as any).mockResolvedValue([
+      { id:'rev-fuzzy', amount:100, month:revDate, source:null, category:null },
+    ]);
+
+    const res = await POST();
+    const d = await res.json();
+    expect(d.pendingReview).toHaveLength(1);
+    expect(d.pendingReview[0].confidence).toBe(0.6);
   });
 
   it('returns 500 on error', async () => {

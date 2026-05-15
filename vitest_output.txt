@@ -1,0 +1,46 @@
+
+ RUN  v4.1.6 /Users/nidishramakrishnan/Work/founderOS/finance
+
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles extractFirstPage throwing unknown error
+DEBUG BODY: {
+  success: true,
+  detectedType: 'financial_statement',
+  label: 'Fin',
+  summary: '0 items imported from Acme',
+  details: { companyName: 'Acme', totalItems: 0 },
+  imported: 0
+}
+
+ ❯ __tests__/integration/import-smart-deep.test.ts (26 tests | 1 failed) 121ms
+     ✓ returns 400 when no file is uploaded 25ms
+     ✓ returns CSV instruction when uploading a .csv 8ms
+     ✓ returns 400 for unsupported file types 3ms
+     ✓ handles invoice PDF successfully 24ms
+     ✓ returns 422 if invoice parsing throws error 2ms
+     ✓ handles duplicate invoice without forceImport 4ms
+     ✓ handles duplicate invoice WITH forceImport 2ms
+     ✓ matches invoice to revenue with exact match 1ms
+     ✓ matches invoice to revenue with 0.04 diff and empty billedTo address 6ms
+     ✓ handles bank statement successfully 3ms
+     ✓ handles bank statement fallback headers and creates revenue for Misc category 5ms
+     ✓ handles bank statement missing success meta 1ms
+     ✓ handles bank statement exec throw 2ms
+     ✓ handles bank statement with dashboard entry error 1ms
+     ✓ returns error when GEMINI_API_KEY is not configured 3ms
+     ✓ handles unknown document type falling back to Gemini and failing JSON parse 4ms
+     ✓ handles financial statement with empty lineItems 1ms
+     ✓ handles financial statement skipping items due to DB throw 2ms
+     ✓ handles financial statement importing items with markdown json format 1ms
+     ✓ handles financial statement importing items but skipping errors 1ms
+     ✓ handles fs.unlinkSync throwing error during cleanup 1ms
+     ✓ returns 500 on unexpected error 0ms
+     × handles extractFirstPage throwing unknown error 8ms
+     ✓ handles bankTransaction.create throwing unknown error during smart import 2ms
+     ✓ handles fs.unlinkSync throwing unknown error on success path of bank statement 2ms
+     ✓ handles fs.unlinkSync throwing unknown error on error path of bank statement 2ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 25 passed (26)
+   Start at  11:24:18
+   Duration  866ms (transform 372ms, setup 0ms, import 512ms, tests 121ms, environment 0ms)
+

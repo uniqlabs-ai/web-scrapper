@@ -94,16 +94,16 @@ export default function SettingsPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/bank/accounts").then((r) => r.json()),
-      fetch("/api/clients").then((r) => r.json()),
-      fetch("/api/settings/organization").then((r) => r.json()),
-      fetch("/api/users").then((r) => r.json()),
+      fetch("/api/bank/accounts").then((r) => r.json()).catch(() => []),
+      fetch("/api/clients").then((r) => r.json()).catch(() => ({ clients: [] })),
+      fetch("/api/settings/organization").then((r) => r.json()).catch(() => ({})),
+      fetch("/api/users").then((r) => r.json()).catch(() => ({ users: [] })),
     ]).then(([bankData, clData, orgData, userData]) => {
       setBankAccounts(Array.isArray(bankData) ? bankData : []);
-      setClients(clData.clients || []);
-      setTeamUsers(userData.users || []);
-      setHasResend(orgData.hasResend || false);
-      if (orgData.organization) {
+      setClients(clData?.clients || []);
+      setTeamUsers(userData?.users || []);
+      setHasResend(orgData?.hasResend || false);
+      if (orgData?.organization) {
         setOrg(orgData.organization);
         try {
           const alerts = JSON.parse(orgData.organization.alertSettings || "{}");

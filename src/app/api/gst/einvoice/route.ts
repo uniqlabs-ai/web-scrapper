@@ -1,27 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const EinvoiceQuerySchema = z.object({
+  invoiceId: z.string().min(1, "invoiceId is required"),
+});
 
 /**
  * GET /api/gst/einvoice — Generate e-invoicing JSON for IRP portal
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
-    const invoiceId = searchParams.get("invoiceId");
 
-    if (!invoiceId) return NextResponse.json({ error: "invoiceId required" }, { status: 400 });
+    const parsed = EinvoiceQuerySchema.safeParse({ invoiceId: searchParams.get("invoiceId") });
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: parsed.error.issues }, { status: 400 });
+    }
+    const { invoiceId } = parsed.data;
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, userId },
+      where: { id: invoiceId, userId, organizationId },
       include: { client: true, lineItems: true },
     });
 
     if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
     const org = await prisma.organization.findFirst({
-      where: { users: { some: { id: userId } } },
+      where: { id: organizationId },
     });
 
     // E-invoice JSON as per Indian GST e-invoicing schema (simplified)
@@ -86,7 +95,7 @@ export async function GET(request: NextRequest) {
       note: "This JSON can be uploaded to the GST IRP portal (einvoice1.gst.gov.in) for IRN generation",
     });
   } catch (error) {
-    console.error("E-invoicing error:", error);
+    log.error("E-invoicing error", { module: "gst", action: "einvoice", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

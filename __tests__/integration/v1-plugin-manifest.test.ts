@@ -26,7 +26,7 @@ function req(method='GET', body?:unknown, url='http://localhost:3008/api/v1/plug
 
 describe('GET /api/v1/plugin/manifest', () => {
   it('handles GET successfully', async () => {
-    const res = await GET(req());
+    const res = await GET();
     expect(res.status).toBeLessThan(600);
     const data = await res.json();
     expect(data).toBeDefined();

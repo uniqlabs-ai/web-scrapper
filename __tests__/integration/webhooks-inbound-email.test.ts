@@ -1,48 +1,129 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const mockGenerateContent = vi.fn();
+vi.mock('@google/generative-ai', () => ({
+  GoogleGenerativeAI: class {
+    getGenerativeModel() { return { generateContent: mockGenerateContent }; }
+  }
+}));
+
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    user: { findFirst: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[]}) },
-    receipt: { findFirst: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"processed","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"fileName":"bill.png","mimeType":"image/png","confidence":0.9}), create: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"processed","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"fileName":"bill.png","mimeType":"image/png","confidence":0.9}), update: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"processed","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"fileName":"bill.png","mimeType":"image/png","confidence":0.9}) },
-    expense: { create: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[]}) },
-    expenseApproval: { create: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"pending","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"expense":{"id":"e1"}}) }
+    user: { findFirst: vi.fn() },
+    receipt: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    expense: { create: vi.fn() },
+    expenseApproval: { create: vi.fn() },
   },
 }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
 vi.mock('@/lib/webhooks', () => ({ verifyWebhookSignature: vi.fn() }));
-vi.mock('@google/generative-ai', () => { class M { getGenerativeModel() { return { generateContent: async () => ({ response: { text: () => '{"category":"Software","confidence":0.9,"description":"Test","amount":5000,"vendor":"Vendor","date":"2025-01-01"}' } }) }; } } return { GoogleGenerativeAI: M }; });
 
 import { prisma } from '@/lib/prisma';
 import { verifyWebhookSignature } from '@/lib/webhooks';
 import { POST } from '@/app/api/webhooks/inbound-email/route';
 
-import { mockPrisma } from '../helpers/prisma-mock';
-const mp = mockPrisma(prisma);
+const mp = vi.mocked(prisma);
 const mw = vi.mocked(verifyWebhookSignature);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mw.mockReturnValue(true);
+  process.env.GEMINI_API_KEY = 'test-key';
+  
+  mockGenerateContent.mockResolvedValue({
+    response: { text: () => '{"category":"Software","confidence":0.9,"description":"Test","amount":5000,"vendor":"Vendor","date":"2025-01-01"}' }
+  });
+  
+  (mp.user.findFirst as any).mockResolvedValue({ id: 'u1', organizationId: 'org-1' });
+  (mp.receipt.findFirst as any).mockResolvedValue(null);
+  (mp.receipt.create as any).mockResolvedValue({ id: 'r1' });
+  (mp.expense.create as any).mockResolvedValue({ id: 'e1' });
 });
 
-function req(method='GET', body?:unknown, url='http://localhost:3008/api/webhooks/inbound-email'): NextRequest {
-  const init: Record<string,unknown> = { method };
-  if (body) { init.body=JSON.stringify(body); init.headers={'Content-Type':'application/json'}; }
-  return new NextRequest(new URL(url), init);
+function req(body: any): NextRequest {
+  return new NextRequest(new URL('http://localhost:3008/api/webhooks/inbound-email'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json', 'x-webhook-signature': 'sig' },
+  });
 }
 
 describe('POST /api/webhooks/inbound-email', () => {
-  it('handles POST successfully', async () => {
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeLessThan(600);
-    const data = await res.json();
-    expect(data).toBeDefined();
-  });
-
   it('rejects invalid signature', async () => {
     mw.mockReturnValue(false);
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect([400, 401]).toContain(res.status);
+    const res = await POST(req({}));
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 and ignores if no attachments', async () => {
+    const res = await POST(req({ attachments: [] }));
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 200 and ignores if attachment is not an image', async () => {
+    const res = await POST(req({
+      from: 'test@test.com',
+      subject: 'Bill',
+      attachments: [{ content_type: 'application/pdf', filename: 'bill.pdf', content: 'base64' }]
+    }));
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 503 if GEMINI_API_KEY is missing', async () => {
+    delete process.env.GEMINI_API_KEY;
+    const res = await POST(req({
+      from: 'test@test.com',
+      subject: 'Bill',
+      attachments: [{ content_type: 'image/png', filename: 'bill.png', content: 'base64' }]
+    }));
+    expect(res.status).toBe(503);
+  });
+
+  it('throws and logs error if OCR JSON parsing fails', async () => {
+    mockGenerateContent.mockResolvedValue({ response: { text: () => 'invalid-json' } });
+    const res = await POST(req({
+      from: 'test@test.com',
+      subject: 'Bill',
+      attachments: [{ content_type: 'image/png', filename: 'bill.png', content: 'base64' }]
+    }));
+    expect(res.status).toBe(500); // Throws -> caught by global catch -> returns 500
+  });
+
+  it('returns 200 if sender email is not found in users', async () => {
+    (mp.user.findFirst as any).mockResolvedValue(null);
+    const res = await POST(req({
+      from: 'Test User <unknown@test.com>',
+      subject: 'Bill',
+      attachments: [{ content_type: 'image/png', filename: 'bill.png', content: 'base64' }]
+    }));
+    expect(res.status).toBe(200); // Prevents webhook retries
+  });
+
+  it('returns 200 duplicate skipped if receipt already exists', async () => {
+    (mp.receipt.findFirst as any).mockResolvedValue({ id: 'r-exist' });
+    const res = await POST(req({
+      from: 'test@test.com',
+      subject: 'Bill',
+      attachments: [{ content_type: 'image/png', filename: 'bill.png', content: 'base64' }]
+    }));
+    expect(res.status).toBe(200);
+    const d = await res.json();
+    expect(d.duplicate).toBe(true);
+  });
+
+  it('processes valid image attachment, calls OCR, and creates expense and approval', async () => {
+    const res = await POST(req({
+      from: 'Test <test@test.com>',
+      subject: 'AWS Bill',
+      attachments: [{ content_type: 'image/png', filename: 'bill.png', content: 'base64-data' }]
+    }));
+    expect(res.status).toBe(200);
+    const d = await res.json();
+    expect(d.success).toBe(true);
+    expect(mp.receipt.create).toHaveBeenCalled();
+    expect(mp.expense.create).toHaveBeenCalled();
+    expect(mp.receipt.update).toHaveBeenCalled();
+    expect(mp.expenseApproval.create).toHaveBeenCalled();
   });
 });

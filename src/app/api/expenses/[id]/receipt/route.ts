@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const ReceiptFileSchema = z.object({
+  fileName: z.string().min(1).max(500),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
+  sizeBytes: z.number().max(10 * 1024 * 1024, "File too large. Maximum 10MB allowed."),
+});
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { id } = await params;
 
     const expense = await prisma.expense.findFirst({
-      where: { id, userId },
+      where: { id, userId, organizationId },
     });
 
     if (!expense) {
@@ -28,25 +36,13 @@ export async function POST(
       );
     }
 
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      return NextResponse.json(
-        { error: "File too large. Maximum 10MB allowed." },
-        { status: 400 }
-      );
-    }
-
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "application/pdf",
-    ];
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        { error: "Invalid file type. Allowed: JPEG, PNG, WebP, PDF" },
-        { status: 400 }
-      );
+    const fileParsed = ReceiptFileSchema.safeParse({
+      fileName: file.name,
+      mimeType: file.type,
+      sizeBytes: file.size,
+    });
+    if (!fileParsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: fileParsed.error.issues }, { status: 400 });
     }
 
     // Store receipt as base64 data URI for now (in production, upload to Supabase Storage)
@@ -65,7 +61,7 @@ export async function POST(
       message: "Receipt uploaded successfully",
     });
   } catch (error) {
-    console.error("Upload receipt error:", error);
+    log.error("Upload receipt error", { module: "expenses", action: "receipt", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to upload receipt" },
       { status: 500 }

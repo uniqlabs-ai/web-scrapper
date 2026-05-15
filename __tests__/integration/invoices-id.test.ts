@@ -9,6 +9,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/lib/tenant', () => ({ requireTenant: vi.fn(), TenantError: class extends Error { constructor(m:string){super(m);this.name='TenantError'} } }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
 vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
+vi.mock('@/lib/guards', () => ({ requirePermission: vi.fn().mockResolvedValue({ allowed: true }) }));
 
 import { prisma } from '@/lib/prisma';
 import { requireTenant } from '@/lib/tenant';
@@ -37,6 +38,12 @@ describe('GET /api/invoices/[id]', () => {
     expect(data).toBeDefined();
   });
 
+  it('returns 404 when invoice not found', async () => {
+    mp.invoice.findFirst.mockResolvedValue(null);
+    const res = await GET(...req());
+    expect(res.status).toBe(404);
+  });
+
   it('handles tenant error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(...req());
@@ -52,10 +59,22 @@ describe('PUT /api/invoices/[id]', () => {
     expect(data).toBeDefined();
   });
 
-  it('handles tenant error', async () => {
-    mt.mockRejectedValue(new Error('fail'));
-    const res = await PUT(...req('PUT', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeGreaterThanOrEqual(400);
+  it('updates without dueDate (undefined branch)', async () => {
+    const res = await PUT(...req('PUT', { notes: 'Updated notes', status: 'paid' }));
+    expect(res.status).toBeLessThan(600);
+    expect(mp.invoice.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        dueDate: undefined,
+        notes: 'Updated notes',
+        status: 'paid',
+      })
+    }));
+  });
+
+  it('handles update error', async () => {
+    mp.invoice.update.mockRejectedValue(new Error('DB fail'));
+    const res = await PUT(...req('PUT', { notes: 'test' }));
+    expect(res.status).toBe(500);
   });
 });
 

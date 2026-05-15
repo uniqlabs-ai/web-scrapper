@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AlertTriangle, Trash2 } from "lucide-react";
 
 interface ConfirmDialogProps {
@@ -22,12 +22,30 @@ export function ConfirmDialog({
   onCancel,
   destructive = false,
 }: ConfirmDialogProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  // Auto-focus cancel button and handle Escape
+  useEffect(() => {
+    if (!open) return;
+    cancelRef.current?.focus();
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [open, onCancel]);
+
   if (!open) return null;
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div
         className="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-message"
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: 400 }}
       >
@@ -50,21 +68,21 @@ export function ConfirmDialog({
             flexShrink: 0,
           }}>
             {destructive ? (
-              <Trash2 size={20} style={{ color: "#ef4444" }} />
+              <Trash2 size={20} style={{ color: "#ef4444" }} aria-hidden="true" />
             ) : (
-              <AlertTriangle size={20} style={{ color: "#3b82f6" }} />
+              <AlertTriangle size={20} style={{ color: "#3b82f6" }} aria-hidden="true" />
             )}
           </div>
           <div>
-            <h3 style={{ marginBottom: 4 }}>{title}</h3>
-            <p style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.5 }}>
+            <h3 id="confirm-dialog-title" style={{ marginBottom: 4 }}>{title}</h3>
+            <p id="confirm-dialog-message" style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.5 }}>
               {message}
             </p>
           </div>
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onCancel}>
+          <button ref={cancelRef} className="btn btn-secondary" onClick={onCancel}>
             Cancel
           </button>
           <button

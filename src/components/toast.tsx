@@ -52,18 +52,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={{ toast: addToast }}>
       {children}
 
-      <div style={{
-        position: "fixed",
-        bottom: 24,
-        right: 24,
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-relevant="additions"
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 9999,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
+            role={t.type === "error" ? "alert" : undefined}
             style={{
               background: colors[t.type].bg,
               border: `1px solid ${colors[t.type].border}`,
@@ -87,6 +93,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <span style={{ flex: 1 }}>{t.message}</span>
             <button
               onClick={() => removeToast(t.id)}
+              aria-label="Dismiss notification"
               style={{
                 background: "none",
                 border: "none",

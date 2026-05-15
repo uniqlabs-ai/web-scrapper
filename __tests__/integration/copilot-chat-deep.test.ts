@@ -234,6 +234,170 @@ describe('POST /api/copilot/chat', () => {
       const data = await res.json();
       expect(data.response).toContain("couldn't find");
     });
+
+    it('formats expense data', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: {
+            expenses: [{ description: 'AWS', amount: 5000 }],
+            summary: { thisMonth: 15000, count: 3 },
+          }
+        }),
+      });
+      const res = await POST(req({ message: 'expenses this month' }));
+      const data = await res.json();
+      expect(data.response).toContain('Expenses');
+    });
+
+    it('formats revenue by client data', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: {
+            clients: [{ name: 'Acme', total: 100000, recurring: 80000 }],
+          }
+        }),
+      });
+      const res = await POST(req({ message: 'revenue by client' }));
+      const data = await res.json();
+      expect(data.response).toContain('Acme');
+    });
+
+    it('formats financial health data with recommendations', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: {
+            score: 75, status: 'Good',
+            health: { runway: 12, profitMargin: 25 },
+            recommendations: ['Reduce burn rate', 'Increase MRR'],
+          }
+        }),
+      });
+      const res = await POST(req({ message: 'health score' }));
+      const data = await res.json();
+      expect(data.response).toContain('75/100');
+      expect(data.response).toContain('Reduce burn rate');
+    });
+
+    it('formats financial health data without recommendations', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: {
+            score: 90, status: 'Excellent',
+            health: { runway: 24, profitMargin: 40 },
+            recommendations: [],
+          }
+        }),
+      });
+      const res = await POST(req({ message: 'score' }));
+      const data = await res.json();
+      expect(data.response).toContain('90/100');
+    });
+
+    it('formats department cost data', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: {
+            departments: [{ department: 'Engineering', total: 200000, count: 15 }],
+            grandTotal: 200000,
+          }
+        }),
+      });
+      const res = await POST(req({ message: 'cost by department' }));
+      const data = await res.json();
+      expect(data.response).toContain('Engineering');
+    });
+
+    it('formats cash flow projection data', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: { projectedRunway: 18 }
+        }),
+      });
+      const res = await POST(req({ message: 'cash flow projection' }));
+      const data = await res.json();
+      expect(data.response).toContain('18');
+    });
+
+    it('handles non-ok fetch response', async () => {
+      mockFetch.mockResolvedValue({ ok: false, json: async () => ({}) });
+      const res = await POST(req({ message: 'invoices' }));
+      const data = await res.json();
+      expect(res.status).toBe(200);
+    });
+
+    it('formats invoice with null client', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: {
+            invoices: [{ invoiceNumber: 'INV-002', total: 3000, client: null, status: 'draft' }],
+            summary: { total: 1, outstanding: 0, outstandingAmount: 0 },
+          }
+        }),
+      });
+      const res = await POST(req({ message: 'invoices' }));
+      const data = await res.json();
+      expect(data.response).toContain('No client');
+    });
+
+    it('formats runway data without burnRate', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: { runway: { runwayMonths: 6 }, mrr: 50000 }
+        }),
+      });
+      const res = await POST(req({ message: 'runway' }));
+      const data = await res.json();
+      expect(data.response).toContain('6 months');
+    });
+
+    it('formats runway data without runway but with mrr', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: { mrr: 50000 }
+        }),
+      });
+      const res = await POST(req({ message: 'runway' }));
+      const data = await res.json();
+      expect(data.response).toContain('MRR');
+    });
+
+    it('formats runway data with runway but without mrr', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: { runway: { runwayMonths: 6 }, arr: 600000 }
+        }),
+      });
+      const res = await POST(req({ message: 'runway' }));
+      const data = await res.json();
+      expect(data.response).toContain('ARR');
+    });
+
+    it('handles AI intent with missing queries and actions', async () => {
+      mGemini.mockReturnValue(true);
+      mParseIntent.mockResolvedValueOnce({ summary: 'test' });
+      const res = await POST(req({ message: 'remind me to check' }));
+      const data = await res.json();
+      expect(data.response).toBeDefined();
+    });
+
+    it('handles fetchActions with non-ok response', async () => {
+      mGemini.mockReturnValue(true);
+      mParseIntent.mockResolvedValueOnce({ actions: [{ action: 'test' }], summary: 'test' });
+      mockFetch.mockResolvedValue({ ok: false, json: async () => ({}) });
+      const res = await POST(req({ message: 'run actions' }));
+      const data = await res.json();
+      expect(data.response).toBeDefined();
+    });
   });
 
   describe('error handling', () => {

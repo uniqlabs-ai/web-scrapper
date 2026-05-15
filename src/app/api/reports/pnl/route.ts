@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
 import { generatePnL } from "@/lib/financial-intelligence";
+import { log, toLogError } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
 
     const fromParam = searchParams.get("from");
@@ -18,11 +19,11 @@ export async function GET(request: NextRequest) {
       ? new Date(toParam)
       : new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    const report = await generatePnL(userId, from, to);
+    const report = await generatePnL(userId, organizationId, from, to);
 
     return NextResponse.json(report);
   } catch (error) {
-    console.error("P&L report error:", error);
+    log.error("P&L report error", { module: "reports", action: "pnl", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to generate P&L report" },
       { status: 500 }

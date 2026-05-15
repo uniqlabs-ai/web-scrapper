@@ -90,6 +90,27 @@ describe('GET /api/metrics/saas', () => {
     expect(d.trends).toHaveLength(12);
   });
 
+  it('generates healthy growth alert when LTV:CAC >= 3', async () => {
+    const now = new Date();
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    // High ARPU: 100k MRR / 1 client = 100k ARPU → LTV = 100k / 0.03 = 3,333,333
+    // Low CAC: 10k spend / 1 new client = 10k CAC → LTV:CAC = 333x
+    (mp.revenue.findMany as any).mockResolvedValue([
+      { amount: 100000, month: thisMonth },
+    ]);
+    (mp.expense.findMany as any).mockResolvedValue([
+      { amount: 10000, date: thisMonth, category: { name: 'Marketing' } },
+    ]);
+    (mp.client.findMany as any).mockResolvedValue([
+      { createdAt: thisMonth },
+    ]);
+    (mp.client.count as any).mockResolvedValue(1);
+    const res = await GET(req());
+    const d = await res.json();
+    expect(d.metrics.ltvCacRatio).toBeGreaterThanOrEqual(3);
+    expect(d.alerts.some((a: string) => a.includes('Healthy Growth'))).toBe(true);
+  });
+
   it('returns 500 on error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(req());

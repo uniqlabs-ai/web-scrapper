@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { logAudit } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+
+const PaymentSchema = z.object({
+  amount: z.number().positive("Amount must be positive"),
+  date: z.string().optional(),
+  method: z.enum(["bank_transfer", "upi", "cash", "cheque", "card", "other"]).default("bank_transfer"),
+  reference: z.string().max(255).optional(),
+  notes: z.string().max(1000).optional(),
+});
 
 /**
  * GET /api/invoices/[id]/payments — List payments for an invoice
@@ -12,6 +24,7 @@ export async function GET(
   try {
     const { id } = await params;
     const payments = await prisma.payment.findMany({
+      take: 500,
       where: { invoiceId: id },
       orderBy: { date: "desc" },
     });
@@ -43,7 +56,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("List payments error:", error);
+    log.error("List payments error", { module: "invoices", action: "payments", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to fetch payments" }, { status: 500 });
   }
 }
@@ -56,14 +69,16 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId();
+    const limited = rateLimit(request, { windowSec: 60, max: 20, prefix: "invoice-payment" });
+    if (limited) return limited;
+    const { userId, organizationId } = await requireTenant();
     const { id } = await params;
-    const body = await request.json();
-    const { amount, date, method, reference, notes } = body;
-
-    if (!amount || amount <= 0) {
-      return NextResponse.json({ error: "Amount must be positive" }, { status: 400 });
+    const rawBody = await request.json();
+    const parsed = PaymentSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
     }
+    const { amount, date, method, reference, notes } = parsed.data;
 
     // Get invoice and existing payments
     const invoice = await prisma.invoice.findUnique({ where: { id } });
@@ -72,6 +87,7 @@ export async function POST(
     }
 
     const existingPayments = await prisma.payment.findMany({
+      take: 500,
       where: { invoiceId: id },
     });
     const totalPaid = existingPayments.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -85,37 +101,45 @@ export async function POST(
       );
     }
 
-    // Create payment
-    const payment = await prisma.payment.create({
-      data: {
-        amount,
-        date: date ? new Date(date) : new Date(),
-        method: method || "bank_transfer",
-        reference,
-        notes,
-        invoiceId: id,
-        userId,
-      },
-    });
-
-    // Auto-update invoice status
-    const newTotalPaid = totalPaid + amount;
-    let newStatus = invoice.status;
-    if (newTotalPaid >= invoiceTotal) {
-      newStatus = "paid";
-    } else if (newTotalPaid > 0) {
-      newStatus = "partial";
-    }
-
-    if (newStatus !== invoice.status) {
-      await prisma.invoice.update({
-        where: { id },
+    // RELIABILITY: Atomic transaction — payment creation + invoice status must succeed together
+    const { payment, newStatus } = await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
         data: {
-          status: newStatus,
-          paidAt: newStatus === "paid" ? new Date() : undefined,
+          amount,
+          date: date ? new Date(date) : new Date(),
+          method: method || "bank_transfer",
+          reference,
+          notes,
+          invoiceId: id,
+          userId,
         },
       });
-    }
+
+      // Auto-update invoice status
+      const newTotalPaid = totalPaid + amount;
+      let newStatus = invoice.status;
+      if (newTotalPaid >= invoiceTotal) {
+        newStatus = "paid";
+      } else if (newTotalPaid > 0) {
+        newStatus = "partial";
+      }
+
+      if (newStatus !== invoice.status) {
+        await tx.invoice.update({
+          where: { id },
+          data: {
+            status: newStatus,
+            paidAt: newStatus === "paid" ? new Date() : undefined,
+          },
+        });
+      }
+
+      return { payment, newStatus };
+    });
+
+    const newTotalPaid = totalPaid + amount;
+
+    logAudit({ userId, action: "create", resource: "payment", resourceId: payment.id, details: { invoiceId: id, amount, method, newStatus } });
 
     return NextResponse.json({
       payment: {
@@ -130,7 +154,7 @@ export async function POST(
       balance: invoiceTotal - newTotalPaid,
     }, { status: 201 });
   } catch (error) {
-    console.error("Create payment error:", error);
+    log.error("Create payment error", { module: "invoices", action: "payments", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to record payment" }, { status: 500 });
   }
 }

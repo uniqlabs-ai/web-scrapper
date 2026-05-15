@@ -59,8 +59,8 @@ describe('GET /api/gst/returns', () => {
       (mp.invoice.findMany as any).mockResolvedValue([
         {
           invoiceNumber:'INV-001', subtotal:100000, total:118000, issueDate:new Date('2025-04-10'),
-          placeOfSupply:'29-Karnataka', isInterState:false,
-          client:{ name:'Acme Corp', gstNumber:'29AABCU1234F1Z5', company:'Acme Corp' },
+          placeOfSupply: null, isInterState:false,
+          client: { name: '', gstNumber: '29XYZ', company: null },
           lineItems:[{ cgst:9000, sgst:9000, igst:0 }],
         },
         {
@@ -69,13 +69,19 @@ describe('GET /api/gst/returns', () => {
           client:{ name:'Local Customer', gstNumber:null, company:null },
           lineItems:[{ cgst:4500, sgst:4500, igst:0 }],
         },
+        {
+          invoiceNumber:'INV-003', subtotal:20000, total:23600, issueDate:new Date('2025-04-15'),
+          placeOfSupply:'27-Maharashtra', isInterState:true,
+          client:{ name:'Interstate Corp', gstNumber:'27AABCU1234F1Z5', company:'Interstate' },
+          lineItems:[{ cgst:0, sgst:0, igst:3600 }],
+        },
       ]);
       const res = await GET(req('http://localhost:3008/api/gst/returns?type=gstr1&month=2025-04'));
       const d = await res.json();
       expect(d.type).toBe('gstr1');
-      expect(d.b2b.count).toBe(1);
+      expect(d.b2b.count).toBe(2);
       expect(d.b2c.count).toBe(1);
-      expect(d.totalInvoices).toBe(2);
+      expect(d.totalInvoices).toBe(3);
     });
   });
 

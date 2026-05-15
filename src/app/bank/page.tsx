@@ -36,6 +36,8 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { DateRangeFilter } from "@/components/date-range-filter";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, ColumnDef } from "@/components/data-table";
+import { EmptyState } from "@/components/empty-state";
+import { StaggerContainer, SlideUp } from "@/components/animations";
 
 /* ──────────────────────────── Types ──────────────────────────── */
 
@@ -608,7 +610,7 @@ export default function BankPage() {
   useEffect(() => {
     fetch("/api/integrations/gmail")
       .then((r) => r.json())
-      .then((d) => setGmailStatus(d))
+      .then((d) => { if (d && !d.error) setGmailStatus(d); })
       .catch(() => { });
   }, []);
 
@@ -1086,13 +1088,16 @@ export default function BankPage() {
 
       {/* Summary KPIs */}
       {!isEmpty && (
-        <div className="kpi-grid" style={{ marginBottom: 24 }}>
+        <StaggerContainer className="kpi-grid" style={{ marginBottom: 24 }}>
+          <SlideUp delay={0}>
           <div className="kpi-card">
             <div className="kpi-label">
               <Wallet size={14} /> Transactions
             </div>
             <div className="kpi-value">{summary.transactionCount}</div>
           </div>
+          </SlideUp>
+          <SlideUp delay={0.05}>
           <div className="kpi-card">
             <div className="kpi-label" style={{ color: "#22C55E" }}>
               <TrendingUp size={14} /> Total Credits
@@ -1101,6 +1106,8 @@ export default function BankPage() {
               {formatCurrency(summary.totalCredit)}
             </div>
           </div>
+          </SlideUp>
+          <SlideUp delay={0.1}>
           <div className="kpi-card">
             <div className="kpi-label" style={{ color: "#F43F5E" }}>
               <TrendingDown size={14} /> Total Debits
@@ -1109,6 +1116,8 @@ export default function BankPage() {
               {formatCurrency(summary.totalDebit)}
             </div>
           </div>
+          </SlideUp>
+          <SlideUp delay={0.15}>
           <div className="kpi-card">
             <div className="kpi-label">
               <Sparkles size={14} /> Net Flow
@@ -1125,7 +1134,8 @@ export default function BankPage() {
               {formatCurrency(summary.totalCredit - summary.totalDebit)}
             </div>
           </div>
-        </div>
+          </SlideUp>
+        </StaggerContainer>
       )}
 
       {/* Filters */}

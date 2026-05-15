@@ -60,6 +60,20 @@ describe('GET /api/clients', () => {
     expect(d.clients[0].latestInvoiceCurrency).toBe('INR');
   });
 
+  it('applies from-only date filter', async () => {
+    mp.client.findMany.mockResolvedValue([]);
+    const res = await GET(req('GET','http://localhost:3008/api/clients?from=2025-04-01'));
+    expect(res.status).toBe(200);
+    expect(mp.client.findMany).toHaveBeenCalled();
+  });
+
+  it('applies to-only date filter', async () => {
+    mp.client.findMany.mockResolvedValue([]);
+    const res = await GET(req('GET','http://localhost:3008/api/clients?to=2025-06-30'));
+    expect(res.status).toBe(200);
+    expect(mp.client.findMany).toHaveBeenCalled();
+  });
+
   it('returns 500 on error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(req());

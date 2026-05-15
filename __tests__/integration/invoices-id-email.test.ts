@@ -3,43 +3,103 @@ import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    invoice: { findFirst: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"c1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"total":10000,"subtotal":10000,"tax":1800,"client":{"id":"c1","name":"Client","email":"c@t.com"}}), update: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"c1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"total":10000,"subtotal":10000,"tax":1800,"client":{"id":"c1","name":"Client","email":"c@t.com"}}) }
+    invoice: { findFirst: vi.fn(), update: vi.fn() },
   },
 }));
+
 vi.mock('@/lib/tenant', () => ({ requireTenant: vi.fn(), TenantError: class extends Error { constructor(m:string){super(m);this.name='TenantError'} } }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
-vi.mock('jspdf', () => ({ default: class { text() {} save() {} setFontSize() {} setFont() {} line() {} internal = { getNumberOfPages: () => 1, pageSize: { getWidth: () => 210, getHeight: () => 297 } }; addPage() {} output() { return 'mock-pdf'; } } }));
+vi.mock('@/lib/pdf', () => ({ generateInvoicePDF: vi.fn().mockReturnValue(Buffer.from('pdf-data')) }));
+
+global.fetch = vi.fn();
 
 import { prisma } from '@/lib/prisma';
 import { requireTenant } from '@/lib/tenant';
 import { POST } from '@/app/api/invoices/[id]/email/route';
 
-import { mockPrisma } from '../helpers/prisma-mock';
-const mp = mockPrisma(prisma);
+const mp = vi.mocked(prisma);
 const mt = vi.mocked(requireTenant);
+const mFetch = vi.mocked(global.fetch);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mt.mockResolvedValue({ userId: 'u1', organizationId: 'org-1' });
+  process.env.RESEND_API_KEY = 'test-key';
+  mFetch.mockResolvedValue({ ok: true, text: async () => 'OK' } as any);
 });
 
-function req(method='GET', body?:unknown, id: string='test-id'): [NextRequest, { params: Promise<{id:string}> }] {
-  const init: Record<string,unknown> = { method };
-  if (body) { init.body=JSON.stringify(body); init.headers={'Content-Type':'application/json'}; }
-  return [new NextRequest(new URL('http://localhost:3008/api/invoices/[id]/email'), init), { params: Promise.resolve({ id }) }];
+function req(id: string='inv-1'): [NextRequest, { params: Promise<{id:string}> }] {
+  return [new NextRequest(new URL(`http://localhost:3008/api/invoices/${id}/email`), { method: 'POST' }), { params: Promise.resolve({ id }) }];
 }
 
 describe('POST /api/invoices/[id]/email', () => {
-  it('handles POST successfully', async () => {
-    const res = await POST(...req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeLessThan(600);
+  it('returns 404 if invoice not found', async () => {
+    (mp.invoice.findFirst as any).mockResolvedValue(null);
+    const res = await POST(...req());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 if client has no email', async () => {
+    (mp.invoice.findFirst as any).mockResolvedValue({
+      id: 'inv-1', client: { email: null }
+    });
+    const res = await POST(...req());
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 503 if RESEND_API_KEY is not set', async () => {
+    delete process.env.RESEND_API_KEY;
+    (mp.invoice.findFirst as any).mockResolvedValue({
+      id: 'inv-1', client: { email: 'test@example.com' }, lineItems: [], issueDate: new Date(), dueDate: new Date()
+    });
+    const res = await POST(...req());
+    expect(res.status).toBe(503);
+  });
+
+  it('sends email successfully with payment UPI ID', async () => {
+    (mp.invoice.findFirst as any).mockResolvedValue({
+      id: 'inv-1', invoiceNumber: 'INV-123', total: 1000,
+      client: { name: 'Acme', email: 'test@example.com' },
+      organization: { name: 'Org', alertSettings: JSON.stringify({ paymentUpiId: 'test@upi' }) },
+      lineItems: [{ quantity: 1, unitPrice: 1000, amount: 1000 }],
+      issueDate: new Date(), dueDate: new Date()
+    });
+
+    const res = await POST(...req());
+    expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toBeDefined();
+    expect(data.success).toBe(true);
+    expect(mFetch).toHaveBeenCalled();
+    expect(mp.invoice.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'sent' } }));
+  });
+
+  it('handles malformed alertSettings gracefully', async () => {
+    (mp.invoice.findFirst as any).mockResolvedValue({
+      id: 'inv-1', invoiceNumber: 'INV-123', total: 1000,
+      client: { name: 'Acme', email: 'test@example.com' },
+      organization: { name: 'Org', alertSettings: 'invalid json' },
+      lineItems: [], issueDate: new Date(), dueDate: new Date()
+    });
+
+    const res = await POST(...req());
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 502 if resend API fails', async () => {
+    (mp.invoice.findFirst as any).mockResolvedValue({
+      id: 'inv-1', invoiceNumber: 'INV-123', total: 1000,
+      client: { name: 'Acme', email: 'test@example.com' },
+      lineItems: [], issueDate: new Date(), dueDate: new Date()
+    });
+    mFetch.mockResolvedValue({ ok: false, text: async () => 'Failed' } as any);
+
+    const res = await POST(...req());
+    expect(res.status).toBe(502);
   });
 
   it('handles tenant error', async () => {
     mt.mockRejectedValue(new Error('fail'));
-    const res = await POST(...req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    const res = await POST(...req());
+    expect(res.status).toBe(500);
   });
 });

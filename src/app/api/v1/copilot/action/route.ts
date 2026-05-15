@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractFounderOSToken } from "@/lib/founder-os-jwt";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { CopilotActionSchema } from "@/lib/schemas";
 import { v4 as uuid } from "uuid";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * POST /api/v1/copilot/action
@@ -18,22 +20,28 @@ export async function POST(request: NextRequest) {
     const founderToken = extractFounderOSToken(request);
 
     let userId: string;
+    let organizationId: string | undefined;
     try {
-      userId = await getAuthUserId();
+      const ctx = await requireTenant();
+      userId = ctx.userId;
+      organizationId = ctx.organizationId;
     } catch {
       if (founderToken?.sub) {
         userId = founderToken.sub;
+        organizationId = founderToken.organizationId;
       } else {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
 
-    const body = await request.json();
-    const { action, params } = body;
-
-    if (!action) {
-      return NextResponse.json({ error: "action is required" }, { status: 400 });
+    const rawBody = await request.json();
+    const parsed = CopilotActionSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
     }
+    const { action, params: rawParams } = parsed.data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params = (rawParams || {}) as any;
 
     switch (action) {
       // ── CREATE INVOICE ─────────────────────────────────
@@ -62,7 +70,7 @@ export async function POST(request: NextRequest) {
         );
 
         // Generate invoice number
-        const count = await prisma.invoice.count({ where: { userId } });
+        const count = await prisma.invoice.count({ where: { userId, organizationId } });
         const invoiceNumber = `INV-${String(count + 1).padStart(4, "0")}`;
 
         const invoice = await prisma.invoice.create({
@@ -70,6 +78,7 @@ export async function POST(request: NextRequest) {
             id: uuid(),
             invoiceNumber,
             userId,
+            organizationId,
             clientId: clientId || null,
             issueDate: new Date(),
             dueDate: new Date(dueDate),
@@ -111,6 +120,7 @@ export async function POST(request: NextRequest) {
           data: {
             id: uuid(),
             userId,
+            organizationId,
             description,
             amount: Number(amount),
             date: date ? new Date(date) : new Date(),
@@ -148,6 +158,7 @@ export async function POST(request: NextRequest) {
           data: {
             id: uuid(),
             userId,
+            organizationId,
             amount: Number(revAmount),
             type, // 'recurring' or 'one-time'
             source: source || null,
@@ -166,7 +177,7 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
-    console.error("[copilot/action] Error:", error);
+    log.error("Error", { module: "copilot", action: "action", error: toLogError(error) });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }

@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractFounderOSToken } from "@/lib/founder-os-jwt";
 import { prisma } from "@/lib/prisma";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const FounderOsTokenSchema = z.object({
+  email: z.string().email(),
+  sub: z.string().min(1),
+  organizationId: z.string().optional(),
+  role: z.string().optional(),
+  exp: z.number(),
+});
 
 /**
  * POST /api/v1/auth/founder-os-token
@@ -16,6 +26,14 @@ export async function POST(request: NextRequest) {
     if (!token) {
       return NextResponse.json(
         { error: "Invalid or missing Founder OS JWT" },
+        { status: 401 }
+      );
+    }
+
+    const tokenParsed = FounderOsTokenSchema.safeParse(token);
+    if (!tokenParsed.success) {
+      return NextResponse.json(
+        { error: "Token validation failed", details: tokenParsed.error.issues },
         { status: 401 }
       );
     }
@@ -49,7 +67,7 @@ export async function POST(request: NextRequest) {
       expiresAt: new Date(token.exp * 1000).toISOString(),
     });
   } catch (error) {
-    console.error("[auth/founder-os-token] Error:", error);
+    log.error("Error", { module: "auth", action: "founder-os-token", error: toLogError(error) });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }

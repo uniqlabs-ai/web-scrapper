@@ -62,6 +62,20 @@ describe('GET /api/budgets', () => {
     expect(d.budgets).toEqual([]);
   });
 
+  it('handles zero monthlyLimit and empty budgets (totalBudget 0)', async () => {
+    mp.user.findUnique.mockResolvedValue({ organizationId:'org-1' } as any);
+    mp.budgetThreshold.findMany.mockResolvedValue([
+      { id:'b2', category:'Zero', monthlyLimit:0, alertAt:0 },
+    ] as any);
+    mp.expense.findMany.mockResolvedValue([]);
+
+    const res = await GET();
+    const d = await res.json();
+    expect(d.summary.utilizationPct).toBe(0);
+    expect(d.budgets[0].utilization).toBe(0);
+    expect(d.budgets[0].isWarning).toBe(true);
+  });
+
   it('detects over-budget status', async () => {
     mp.user.findUnique.mockResolvedValue({ organizationId:'org-1' } as any);
     mp.budgetThreshold.findMany.mockResolvedValue([
@@ -145,5 +159,11 @@ describe('DELETE /api/budgets', () => {
     mg.mockResolvedValue({ allowed: false, response: NextResponse.json({ error: 'Denied' }, { status: 403 }) } as any);
     const res = await DELETE(req('DELETE','http://localhost:3008/api/budgets?id=b1'));
     expect(res.status).toBe(403);
+  });
+
+  it('returns 500 on error', async () => {
+    mp.budgetThreshold.findFirst.mockRejectedValue(new Error('fail'));
+    const res = await DELETE(req('DELETE','http://localhost:3008/api/budgets?id=b1'));
+    expect(res.status).toBe(500);
   });
 });

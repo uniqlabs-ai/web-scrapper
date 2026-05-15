@@ -1,0 +1,58 @@
+
+ RUN  v4.1.6 /Users/nidishramakrishnan/Work/founderOS/finance
+
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles unknown document type falling back to Gemini and failing JSON parse
+CLASSIFICATION RESULT: {"invalid"}
+
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles extractFirstPage throwing unknown error
+CLASSIFICATION RESULT: {"documenttype":"fin","companyname":"acme","lineitems":[]}
+
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles fallback classification for invoice
+CLASSIFICATION RESULT: {"documenttype":"fin","companyname":"acme","lineitems":[]}
+
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles fallback classification for invoice
+TEST DATA: {
+  success: true,
+  detectedType: 'financial_statement',
+  label: 'Fin',
+  summary: '0 items imported from Acme',
+  details: { companyName: 'Acme', totalItems: 0 },
+  imported: 0
+}
+
+ ❯ __tests__/integration/import-smart-deep.test.ts (29 tests | 1 failed) 53ms
+     ✓ returns 400 when no file is uploaded 6ms
+     ✓ returns CSV instruction when uploading a .csv 4ms
+     ✓ returns 400 for unsupported file types 1ms
+     ✓ handles invoice PDF successfully 15ms
+     ✓ returns success false if invoice parser returns error JSON 2ms
+     ✓ handles invoice PDF successfully with existing client 1ms
+     ✓ returns 422 if invoice parsing throws error 1ms
+     ✓ handles duplicate invoice without forceImport 1ms
+     ✓ handles duplicate invoice WITH forceImport 2ms
+     ✓ matches invoice to revenue with exact match 1ms
+     ✓ matches invoice to revenue with 0.04 diff and empty billedTo address 1ms
+     ✓ handles bank statement successfully 2ms
+     ✓ handles bank statement fallback headers and creates revenue for Misc category 2ms
+     ✓ handles bank statement missing success meta 0ms
+     ✓ handles bank statement exec throw 0ms
+     ✓ handles bank statement with dashboard entry error 0ms
+     ✓ returns error when GEMINI_API_KEY is not configured 0ms
+     ✓ handles unknown document type falling back to Gemini and failing JSON parse 1ms
+     ✓ handles financial statement with empty lineItems 0ms
+     ✓ handles financial statement skipping items due to DB throw 2ms
+     ✓ handles financial statement importing items with markdown json format 1ms
+     ✓ handles financial statement importing items but skipping errors 0ms
+     ✓ handles fs.unlinkSync throwing error during cleanup 1ms
+     ✓ returns 500 on unexpected error 0ms
+     ✓ handles extractFirstPage throwing unknown error 1ms
+     ✓ handles bankTransaction.create throwing unknown error during smart import 1ms
+     ✓ handles fs.unlinkSync throwing unknown error on success path of bank statement 1ms
+     ✓ handles fs.unlinkSync throwing unknown error on error path of bank statement 1ms
+     × handles fallback classification for invoice 4ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 28 passed (29)
+   Start at  13:01:15
+   Duration  314ms (transform 82ms, setup 0ms, import 142ms, tests 53ms, environment 0ms)
+

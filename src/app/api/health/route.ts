@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUserId } from "@/lib/auth";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/health — Financial Health Score + AI Recommendations
@@ -13,7 +14,7 @@ export async function GET() {
     const fyStart = now.getMonth() >= 3
       ? new Date(now.getFullYear(), 3, 1)
       : new Date(now.getFullYear() - 1, 3, 1);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const _lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // ── Get user's org ────────────────────────────────────
@@ -24,17 +25,19 @@ export async function GET() {
     const [
       revenues, expenses, invoices, budgets, bankAccounts,
     ] = await Promise.all([
-      prisma.revenue.findMany({ where: { userId, month: { gte: fyStart } } }),
+      prisma.revenue.findMany({ where: { userId, month: { gte: fyStart } }, take: 500 }),
       prisma.expense.findMany({
+      take: 50,
         where: { userId, date: { gte: fyStart } },
         include: { category: true },
       }),
       prisma.invoice.findMany({
+      take: 50,
         where: { userId },
         include: { lineItems: true, payments: true },
       }),
-      orgId ? prisma.budgetThreshold.findMany({ where: { organizationId: orgId } }) : Promise.resolve([]),
-      orgId ? prisma.bankAccount.findMany({ where: { organizationId: orgId } }) : Promise.resolve([]),
+      orgId ? prisma.budgetThreshold.findMany({ where: { organizationId: orgId }, take: 100 }) : Promise.resolve([]),
+      prisma.bankAccount.findMany({ where: { userId, isActive: true }, take: 100 }),
     ]);
 
     // ── Revenue Analysis ────────────────────────────────
@@ -100,7 +103,7 @@ export async function GET() {
     // ── Budget Adherence ────────────────────────────────
     const thisMonthExpenses = expenses.filter((e) => e.date >= thisMonthStart);
     let budgetsBroken = 0;
-    let budgetsTotal = budgets.length;
+    const budgetsTotal = budgets.length;
     for (const b of budgets) {
       const spent = thisMonthExpenses
         .filter((e) => e.category?.name === b.category)
@@ -326,7 +329,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Health error:", error);
+    log.error("Financial health analysis failed", { module: "health", action: "analyze", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

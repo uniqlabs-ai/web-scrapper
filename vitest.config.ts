@@ -6,24 +6,26 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     testTimeout: 15000,
+    pool: 'forks',
+    restoreMocks: true,
     include: ['__tests__/**/*.test.ts', '__tests__/**/*.test.tsx'],
     exclude: ['node_modules', 'e2e'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html', 'json-summary'],
+      reporter: ['text', 'html', 'json-summary', 'json'],
       reportsDirectory: './coverage',
       thresholds: {
-        // Global thresholds tracking our progress to 95% target
-        statements: 80,
-        branches: 60,
-        functions: 85,
-        lines: 80,
+        // Global thresholds — enforced by U13 Coverage Enforcer
+        statements: 95,
+        branches: 90,
+        functions: 95,
+        lines: 95,
         // Strict thresholds for core business logic
         'src/lib/**/*.ts': {
-          statements: 90,
-          branches: 80,
-          functions: 90,
-          lines: 90,
+          statements: 95,
+          branches: 85,
+          functions: 95,
+          lines: 95,
         },
       },
       include: ['src/lib/**/*.ts', 'src/app/api/**/*.ts'],

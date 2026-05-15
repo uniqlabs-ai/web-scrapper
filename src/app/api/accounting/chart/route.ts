@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const JournalEntrySchema = z.object({
+  date: z.string().optional(),
+  narration: z.string().min(1, "Narration is required").max(500),
+  entries: z.array(z.object({
+    accountCode: z.string().min(1).max(20),
+    debit: z.coerce.number().min(0).default(0),
+    credit: z.coerce.number().min(0).default(0),
+  })).min(2, "Minimum 2 entries required"),
+});
 
 /**
  * Chart of Accounts — standard account types for double-entry
@@ -67,6 +79,7 @@ const journalEntries: Array<{
 
 export async function GET(request: NextRequest) {
   try {
+    await requireTenant();
     const { searchParams } = new URL(request.url);
     const view = searchParams.get("view");
 
@@ -127,19 +140,26 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Accounting error:", error);
+    log.error("Accounting error", { module: "accounting", action: "chart", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { date, narration, entries } = body;
+    await requireTenant();
+    const rawBody = await request.json();
 
-    if (!entries?.length || entries.length < 2) {
-      return NextResponse.json({ error: "Minimum 2 entries required" }, { status: 400 });
+    const parsed = JournalEntrySchema.safeParse(rawBody);
+
+    if (!parsed.success) {
+
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
+
     }
+
+    const body = parsed.data;
+    const { date, narration, entries } = body;
 
     // Validate double-entry: total debits must equal total credits
     const totalDebit = entries.reduce((s: number, e: { debit: number }) => s + (e.debit || 0), 0);
@@ -163,7 +183,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(je, { status: 201 });
   } catch (error) {
-    console.error("Journal entry error:", error);
+    log.error("Journal entry error", { module: "accounting", action: "chart", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

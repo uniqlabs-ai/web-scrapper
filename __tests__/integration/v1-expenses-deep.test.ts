@@ -87,7 +87,7 @@ describe('POST /api/v1/expenses', () => {
     const res = await POST(req('POST', 'http://localhost:3008/api/v1/expenses', { amount: 100 }));
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.error).toContain('description and amount');
+    expect(data.error).toBe('Validation failed');
   });
 
   it('returns 400 when amount is missing', async () => {

@@ -13,14 +13,14 @@ export interface Currency {
 export const CURRENCIES: Currency[] = [
   { code: "INR", name: "Indian Rupee", symbol: "₹", locale: "en-IN" },
   { code: "USD", name: "US Dollar", symbol: "$", locale: "en-US" },
-  { code: "EUR", name: "Euro", symbol: "€", locale: "de-DE" },
+  { code: "EUR", name: "Euro", symbol: "€", locale: "en-IE" },
   { code: "GBP", name: "British Pound", symbol: "£", locale: "en-GB" },
-  { code: "AED", name: "UAE Dirham", symbol: "د.إ", locale: "ar-AE" },
+  { code: "AED", name: "UAE Dirham", symbol: "د.إ", locale: "en-AE" },
   { code: "SGD", name: "Singapore Dollar", symbol: "S$", locale: "en-SG" },
-  { code: "JPY", name: "Japanese Yen", symbol: "¥", locale: "ja-JP" },
+  { code: "JPY", name: "Japanese Yen", symbol: "¥", locale: "en-US" },
   { code: "AUD", name: "Australian Dollar", symbol: "A$", locale: "en-AU" },
   { code: "CAD", name: "Canadian Dollar", symbol: "C$", locale: "en-CA" },
-  { code: "CHF", name: "Swiss Franc", symbol: "CHF", locale: "de-CH" },
+  { code: "CHF", name: "Swiss Franc", symbol: "CHF", locale: "en-US" },
 ];
 
 // Fallback static rates (INR per 1 unit of foreign currency)
@@ -50,17 +50,44 @@ export function convertFromINR(amount: number, toCurrency: string, rate?: number
   return Math.round((amount / r) * 100) / 100;
 }
 
-export function formatCurrency(amount: number, currencyCode: string = "INR"): string {
+export function formatCurrency(amount: number, currencyCode: string = "INR", opts?: { decimals?: number }): string {
   const currency = CURRENCIES.find((c) => c.code === currencyCode);
+  const decimals = opts?.decimals ?? 0;
   try {
     return new Intl.NumberFormat(currency?.locale || "en-IN", {
       style: "currency",
       currency: currencyCode,
-      maximumFractionDigits: currencyCode === "JPY" ? 0 : 2,
+      maximumFractionDigits: decimals,
+      minimumFractionDigits: 0,
     }).format(amount);
   } catch {
-    return `${currency?.symbol || ""}${amount.toFixed(2)}`;
+    return `${currency?.symbol || ""}${amount.toFixed(decimals)}`;
   }
+}
+
+/** Compact format: ₹12.4L, $1.2M, €500K etc. */
+export function formatCompact(amount: number, currencyCode: string = "INR"): string {
+  const sym = getSymbol(currencyCode);
+  const abs = Math.abs(amount);
+  const sign = amount < 0 ? "-" : "";
+
+  if (currencyCode === "INR") {
+    // Indian numbering: Cr, L, K
+    if (abs >= 10000000) return `${sign}${sym}${(abs / 10000000).toFixed(1)}Cr`;
+    if (abs >= 100000) return `${sign}${sym}${(abs / 100000).toFixed(1)}L`;
+    if (abs >= 1000) return `${sign}${sym}${(abs / 1000).toFixed(0)}K`;
+  } else {
+    // Western numbering: B, M, K
+    if (abs >= 1000000000) return `${sign}${sym}${(abs / 1000000000).toFixed(1)}B`;
+    if (abs >= 1000000) return `${sign}${sym}${(abs / 1000000).toFixed(1)}M`;
+    if (abs >= 1000) return `${sign}${sym}${(abs / 1000).toFixed(0)}K`;
+  }
+  return `${sign}${sym}${Math.round(abs)}`;
+}
+
+/** Get currency symbol by code */
+export function getSymbol(currencyCode: string = "INR"): string {
+  return CURRENCIES.find((c) => c.code === currencyCode)?.symbol || currencyCode;
 }
 
 export function calculateFxGainLoss(

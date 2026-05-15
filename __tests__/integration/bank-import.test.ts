@@ -18,18 +18,22 @@ vi.mock('@/lib/bank-import', () => ({
   detectColumnMapping: vi.fn(),
   normalizeTransactions: vi.fn(),
   extractVendor: vi.fn().mockReturnValue('TestVendor'),
+  findOrCreateBankAccount: vi.fn().mockResolvedValue('acct-1'),
+  checkExistingHashes: vi.fn().mockResolvedValue(new Set()),
 }));
 vi.mock('@/lib/transaction-categorizer', () => ({
   categorizeTransaction: vi.fn(),
   batchCategorize: vi.fn(),
   EXPENSE_CATEGORIES: [],
 }));
+vi.mock('child_process', () => ({ execSync: vi.fn() }));
+vi.mock('fs', () => ({ writeFileSync: vi.fn(), readFileSync: vi.fn(), unlinkSync: vi.fn(), existsSync: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
 vi.mock('@/lib/auth', () => ({ getAuthUserId: vi.fn(), requireUser: vi.fn(), getSessionUser: vi.fn(), getOrCreateSessionUser: vi.fn(), getUserId: vi.fn() }));
 
 import { prisma } from '@/lib/prisma';
 import { requireTenant } from '@/lib/tenant';
-import { parseCSV, detectColumnMapping, normalizeTransactions } from '@/lib/bank-import';
+import { parseCSV, detectColumnMapping, normalizeTransactions, findOrCreateBankAccount } from '@/lib/bank-import';
 import { batchCategorize } from '@/lib/transaction-categorizer';
 import { POST } from '@/app/api/bank/import/route';
 
@@ -105,6 +109,128 @@ describe('POST /api/bank/import', () => {
     expect(res.status).toBe(200);
     expect(d.success).toBe(true);
     expect(d.imported).toBe(1);
+  });
+
+  it('returns 422 when no amount column is detected', async () => {
+    vi.mocked(parseCSV).mockReturnValue({ headers:['date','description'], rows:[['2025-04-01','AWS']] });
+    vi.mocked(detectColumnMapping).mockReturnValue({ date:'date', description:'description', amount:null, debit:null, credit:null } as any);
+    const file = new File(['date,description\n2025-04-01,AWS'], 'test.csv', { type: 'text/csv' });
+    const res = await POST(makeFormReq(file));
+    expect(res.status).toBe(422);
+  });
+
+  it('auto-creates bank account if none exists and processes credit transactions', async () => {
+    vi.mocked(parseCSV).mockReturnValue({
+      headers:['date','description','credit'],
+      rows:[['2025-04-01','Stripe','15000']],
+    });
+    vi.mocked(detectColumnMapping).mockReturnValue({
+      date:'date', description:'description', credit:'credit', amount:null, debit:null,
+    } as any);
+    vi.mocked(normalizeTransactions).mockReturnValue([
+      { date:new Date('2025-04-01'), description:'Stripe', amount:15000, type:'credit', reference:'', hash:'h2' },
+      { date:new Date('2025-04-02'), description:'Duplicate', amount:1000, type:'debit', reference:'', hash:'h3' },
+      { date:new Date('2025-04-03'), description:'TRF TO FD', amount:5000, type:'debit', reference:'', hash:'h4' }, // internal transfer
+      { date:new Date('2025-04-04'), description:'Small fee', amount:0.5, type:'debit', reference:'', hash:'h5' }, // trivial amount
+    ]);
+    vi.mocked(batchCategorize).mockReturnValue([
+      { category:'Capital', vendor:'Stripe', confidence:0.8 }, // Capital -> capital revenue
+      { category:'SaaS', vendor:'AWS', confidence:0.9 },
+      { category:'Transfer', vendor:null, confidence:0.9 },
+      { category:'Fee', vendor:null, confidence:0.9 },
+    ]);
+
+    // findOrCreateBankAccount is mocked at module level to return 'acct-1'
+    (mp.bankTransaction.findMany as any).mockResolvedValue([{ hash: 'h3' }]); // 'Duplicate' already exists
+    (mp.importBatch.create as any).mockResolvedValue({ id:'batch-1' });
+
+    const file = new File(['date,description,credit\n2025-04-01,Stripe,15000'], 'stmt.csv', { type: 'text/csv' });
+    const res = await POST(makeFormReq(file));
+    expect(res.status).toBe(200);
+    const d = await res.json();
+    expect(d.imported).toBe(3); // 3 imported, 1 skipped (h3 dedup'd by fuzzy match)
+    expect(findOrCreateBankAccount).toHaveBeenCalled();
+    expect(mp.revenue.create).toHaveBeenCalled();
+  });
+
+  it('handles db errors during transaction creation and ignores expense/revenue create errors', async () => {
+    vi.mocked(parseCSV).mockReturnValue({
+      headers:['date','description','debit'],
+      rows:[['2025-04-01','Test','15000']],
+    });
+    vi.mocked(detectColumnMapping).mockReturnValue({
+      date:'date', description:'description', debit:'debit', amount:null, credit:null,
+    } as any);
+    vi.mocked(normalizeTransactions).mockReturnValue([
+      { date:new Date('2025-04-01'), description:'FailTxn', amount:100, type:'debit', reference:'', hash:'h_fail' },
+      { date:new Date('2025-04-02'), description:'FailExp', amount:100, type:'debit', reference:'', hash:'h_exp' },
+      { date:new Date('2025-04-03'), description:'FailRev', amount:100, type:'credit', reference:'', hash:'h_rev' },
+    ]);
+    vi.mocked(batchCategorize).mockReturnValue([
+      { category:'SaaS', vendor:'AWS', confidence:0.9 },
+      { category:'SaaS', vendor:'AWS', confidence:0.9 },
+      { category:'Income', vendor:'Stripe', confidence:0.9 },
+    ]);
+
+    (mp.bankAccount.findFirst as any).mockResolvedValue({ id:'acct-1' });
+    (mp.bankTransaction.findMany as any).mockResolvedValue([]);
+    (mp.importBatch.create as any).mockResolvedValue({ id:'batch-1' });
+    
+    // 1st throws unknown error, 2nd succeeds txn but fails expense, 3rd succeeds txn but fails revenue
+    (mp.bankTransaction.create as any)
+      .mockRejectedValueOnce(new Error('Unknown DB error'))
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({});
+    (mp.expense.create as any).mockRejectedValueOnce(new Error('Exp error'));
+    (mp.revenue.create as any).mockRejectedValueOnce(new Error('Rev error'));
+
+    const file = new File(['data'], 'stmt.csv', { type: 'text/csv' });
+    const res = await POST(makeFormReq(file));
+    expect(res.status).toBe(200);
+    const d = await res.json();
+    expect(d.imported).toBe(2);
+  });
+
+  it('processes PDF uploads successfully and handles cleanup errors safely', async () => {
+    const fs = await import('fs');
+    const cp = await import('child_process');
+    
+    vi.mocked(cp.execSync).mockReturnValue(JSON.stringify({
+      success: true,
+      transaction_count: 1,
+    }));
+    vi.mocked(fs.readFileSync).mockReturnValue('date,desc,amount\n2025-01-01,Test,100');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.unlinkSync).mockImplementation(() => { throw new Error('Unlink fail'); }); // testing cleanup throw
+
+    vi.mocked(parseCSV).mockReturnValue({ headers:['date','desc','amount'], rows:[['2025-01-01','Test','100']] });
+    vi.mocked(detectColumnMapping).mockReturnValue({ date:'date', description:'desc', amount:'amount' } as any);
+    vi.mocked(normalizeTransactions).mockReturnValue([{ date:new Date(), description:'Test', amount:100, type:'debit', hash:'h4' }]);
+    vi.mocked(batchCategorize).mockReturnValue([{ category:'Misc', vendor:'Test', confidence:0.5 }]);
+
+    const file = new File(['dummy-pdf-content'], 'test.pdf', { type: 'application/pdf' });
+    const res = await POST(makeFormReq(file));
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 422 when PDF extraction fails with error thrown', async () => {
+    const cp = await import('child_process');
+    vi.mocked(cp.execSync).mockImplementation(() => { throw new Error('PDF Error'); });
+
+    const file = new File(['dummy-pdf-content'], 'test.pdf', { type: 'application/pdf' });
+    const res = await POST(makeFormReq(file));
+    expect(res.status).toBe(422);
+  });
+
+  it('returns 422 when PDF extraction metadata success is false', async () => {
+    const cp = await import('child_process');
+    vi.mocked(cp.execSync).mockReturnValue(JSON.stringify({ success: false, error: 'Bad format' }));
+
+    const file = new File(['dummy-pdf-content'], 'test.pdf', { type: 'application/pdf' });
+    const res = await POST(makeFormReq(file));
+    expect(res.status).toBe(422);
+    const d = await res.json();
+    expect(d.error).toContain('Bad format');
   });
 
   it('returns 500 on error', async () => {

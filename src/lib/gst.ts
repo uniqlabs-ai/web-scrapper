@@ -1,7 +1,15 @@
 import type { GSTBreakdown } from "./types";
 
+/**
+ * GST Rate Engine — FY 2025-26
+ * Standard slabs: 0%, 5%, 12%, 18%, 28%
+ * E-invoice mandatory for turnover > ₹5 Cr (any FY from 2017-18 onwards)
+ */
 const GST_RATES = [0, 5, 12, 18, 28] as const;
 export type GSTRate = (typeof GST_RATES)[number];
+
+/** E-invoice applicability threshold (in ₹) — PAN-level aggregate turnover */
+export const E_INVOICE_THRESHOLD = 50000000; // ₹5 Crore
 
 export function isValidGSTRate(rate: number): rate is GSTRate {
   return GST_RATES.includes(rate as GSTRate);

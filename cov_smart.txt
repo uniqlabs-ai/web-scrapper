@@ -1,0 +1,241 @@
+
+ RUN  v4.1.6 /Users/nidishramakrishnan/Work/founderOS/finance
+      Coverage enabled with v8
+
+ ✓ __tests__/integration/import-smart-deep.test.ts (22 tests) 45ms
+
+ Test Files  1 passed (1)
+      Tests  22 passed (22)
+   Start at  11:17:41
+   Duration  845ms (transform 77ms, setup 0ms, import 130ms, tests 45ms, environment 0ms)
+
+ % Coverage report from v8
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-------------------|---------|----------|---------|---------|-------------------
+All files          |    3.23 |     5.19 |    1.92 |    3.29 |                   
+ ...counting/chart |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 13-170            
+ .../trial-balance |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-79             
+ app/api/accounts  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-54              
+ app/api/activity  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-32              
+ app/api/alerts    |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 18-221            
+ app/api/anomalies |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-149            
+ app/api/ap-inbox  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-181             
+ app/api/audit     |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-80             
+ .../bank/accounts |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-173             
+ ...pi/bank/import |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 37-395            
+ ...k/transactions |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 13-171            
+ ...lling/checkout |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-57              
+ ...illing/webhook |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-70              
+ app/api/budgets   |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-174             
+ ...api/categories |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 13-97             
+ app/api/clients   |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-98              
+ ...i/clients/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-165            
+ ...iance/calendar |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-135            
+ .../consolidation |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-138             
+ ...i/copilot/chat |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 16-251            
+ app/api/dashboard |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-57              
+ ...tect-recurring |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-360            
+ app/api/expenses  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-100             
+ .../expenses/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-60             
+ ...s/[id]/receipt |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-70             
+ ...nses/approvals |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-91              
+ ...nses/breakdown |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-77             
+ ...ses/confidence |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-49              
+ ...i/expenses/ocr |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 6-114             
+ ...ggest-category |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 6-78              
+ app/api/forecast  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-151            
+ app/api/fx/rates  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-61              
+ ...i/gst/cleartax |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-75              
+ ...i/gst/einvoice |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-91             
+ app/api/gst/hsn   |       0 |      100 |       0 |       0 |                   
+  route.ts         |       0 |      100 |       0 |       0 | 8-69              
+ ...pi/gst/returns |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-170            
+ app/api/health    |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-333            
+ ...api/import/csv |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 23-168            
+ ...import/history |       0 |      100 |       0 |       0 |                   
+  route.ts         |       0 |      100 |       0 |       0 | 10-22             
+ ...import/invoice |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 20-212            
+ ...api/import/pdf |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-216             
+ ...i/import/smart |   94.11 |    73.77 |   86.66 |   95.18 |                   
+  route.ts         |   94.11 |    73.77 |   86.66 |   95.18 | ...83-384,473,494 
+ ...grations/gmail |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-74              
+ ...gmail/callback |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 6-97              
+ ...ons/gmail/sync |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-299             
+ app/api/invoices  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-155             
+ .../invoices/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-77             
+ .../[id]/[action] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-61             
+ ...ces/[id]/email |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-158            
+ .../[id]/payments |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-152             
+ ...oices/[id]/pdf |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-81             
+ ...ces/auto-match |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-161             
+ ...nvoices/remind |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-276             
+ .../layout-counts |       0 |      100 |       0 |       0 |                   
+  route.ts         |       0 |      100 |       0 |       0 | 6-19              
+ ...i/metrics/saas |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-137             
+ ...api/onboarding |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-79              
+ .../organizations |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-66              
+ ...nizations/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 13-73             
+ ...zations/switch |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-38              
+ app/api/payroll   |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-294            
+ ...i/payroll/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-173            
+ app/api/receipts  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-132             
+ .../receipts/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-53             
+ ...eceipts/upload |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 8-78              
+ ...reconciliation |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-199             
+ ...ciliation/auto |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 14-273            
+ ...rring-expenses |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-267             
+ ...-expenses/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-158            
+ .../reports/aging |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-95             
+ ...ports/cashflow |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-24              
+ ...orts/cfo-brief |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-250            
+ ...rts/comparison |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-85             
+ ...pi/reports/pdf |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-174            
+ ...pi/reports/pnl |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-27              
+ ...eports/pnl/csv |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-53              
+ ...pi/reports/tax |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-27              
+ app/api/revenue   |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-232            
+ ...s/organization |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-74              
+ ...stions/aliases |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 13-129            
+ app/api/tds       |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-134            
+ ...pi/tds/compute |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 6-95              
+ ...pi/tds/form16a |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 11-97             
+ app/api/transfer  |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-148             
+ app/api/users     |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-85              
+ ...api/users/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-53             
+ ...under-os-token |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 14-54             
+ ...copilot/action |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 18-175            
+ .../copilot/query |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 29-363            
+ ...pi/v1/expenses |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-77              
+ ...pi/v1/invoices |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-113             
+ ...ugin/dashboard |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 9-56              
+ ...ugin/heartbeat |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 5-176             
+ ...lugin/manifest |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 5-44              
+ ...bhooks/inbound |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 18-165            
+ app/api/vendors   |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 13-223            
+ ...i/vendors/[id] |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 10-71             
+ ...s/fingerprints |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 12-123            
+ .../inbound-email |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-163             
+ ...ebhooks/stripe |       0 |        0 |       0 |       0 |                   
+  route.ts         |       0 |        0 |       0 |       0 | 7-116             
+ lib               |       0 |        0 |       0 |       0 |                   
+  ai-provider.ts   |       0 |        0 |       0 |       0 | 11-122            
+  anomalies.ts     |       0 |        0 |       0 |       0 | 13-108            
+  api-auth.ts      |       0 |        0 |       0 |       0 | 10-50             
+  audit.ts         |       0 |        0 |       0 |       0 | 10-49             
+  auth.ts          |       0 |        0 |       0 |       0 | 6-88              
+  bank-import.ts   |       0 |        0 |       0 |       0 | 40-397            
+  csv-importer.ts  |       0 |        0 |       0 |       0 | 28-436            
+  currency.ts      |       0 |        0 |       0 |       0 | 13-102            
+  ...telligence.ts |       0 |        0 |       0 |       0 | 4-61              
+  ...telligence.ts |       0 |        0 |       0 |       0 | 24-315            
+  ...der-os-jwt.ts |       0 |        0 |       0 |       0 | 12-93             
+  gmail-parser.ts  |       0 |        0 |       0 |       0 | 22-215            
+  gst.ts           |       0 |        0 |       0 |       0 | 3-54              
+  guards.ts        |       0 |        0 |       0 |       0 | 41-68             
+  logger.ts        |       0 |        0 |       0 |       0 | 66-375            
+  payouts.ts       |       0 |        0 |       0 |       0 | 27-95             
+  pdf.ts           |       0 |        0 |       0 |       0 | 39-264            
+  rbac.ts          |       0 |        0 |       0 |       0 | 26-141            
+  roles.ts         |       0 |        0 |       0 |       0 | 13-61             
+  runway.ts        |       0 |        0 |       0 |       0 | 5-128             
+  smart-import.ts  |       0 |        0 |       0 |       0 | 12-97             
+  tds.ts           |       0 |        0 |       0 |       0 | 14-84             
+  tenant.ts        |       0 |        0 |       0 |       0 | 19-80             
+  ...ategorizer.ts |       0 |        0 |       0 |       0 | 24-368            
+  webhooks.ts      |       0 |        0 |       0 |       0 | 10-91             
+-------------------|---------|----------|---------|---------|-------------------

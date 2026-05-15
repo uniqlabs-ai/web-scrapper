@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { Wallet } from "lucide-react";
 
 export default function SignInPage() {
   const [loading, setLoading] = useState(false);
@@ -41,7 +42,7 @@ export default function SignInPage() {
           margin: "0 auto 24px",
           boxShadow: "var(--shadow-glow)",
         }}>
-          💰
+          <Wallet size={32} color="#fff" />
         </div>
 
         <h1 style={{

@@ -158,6 +158,13 @@ export const TARGET_COLUMNS: Record<ImportTarget, ColumnMappingDef[]> = {
       aliases: ["client", "customer", "bill to", "company", "name"],
     },
     {
+      field: "currency",
+      label: "Currency",
+      required: false,
+      type: "string",
+      aliases: ["currency", "cur", "ccy", "currency code"],
+    },
+    {
       field: "notes",
       label: "Notes",
       required: false,
@@ -198,55 +205,95 @@ export function autoDetectMapping(
 
 function parseAmount(value: string): number {
   if (!value || value.trim() === "" || value.trim() === "-") return 0;
-  const cleaned = value.replace(/[₹$,\s]/g, "").replace(/\((.+)\)/, "-$1");
+  // Strip all currency symbols (₹$€£¥), currency codes (INR, EUR, USD, etc.), commas, spaces
+  const cleaned = value
+    .replace(/[₹$€£¥\s]/g, "")
+    .replace(/^[A-Z]{2,3}\s*/i, "")  // strip leading currency codes
+    .replace(/,/g, "")
+    .replace(/\((.+)\)/, "-$1");
   const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : Math.abs(num);
 }
 
+/**
+ * Detect currency from a raw value string.
+ * Returns ISO currency code or null.
+ */
+function detectCurrency(value: string): string | null {
+  if (!value) return null;
+  const v = value.trim();
+  if (v.includes("€") || /^EUR\b/i.test(v)) return "EUR";
+  if (v.includes("$") || /^USD\b/i.test(v)) return "USD";
+  if (v.includes("£") || /^GBP\b/i.test(v)) return "GBP";
+  if (v.includes("¥") || /^JPY\b/i.test(v)) return "JPY";
+  if (v.includes("₹") || /^INR\b/i.test(v)) return "INR";
+  if (/^AED\b/i.test(v)) return "AED";
+  if (/^SGD\b/i.test(v)) return "SGD";
+  return null;
+}
+
 function parseDate(value: string): Date | null {
   if (!value || value.trim() === "") return null;
+  const v = value.trim();
 
-  // dd/mm/yyyy or dd-mm-yyyy
-  const dmy = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (dmy) {
-    return new Date(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1]));
+  const MONTHS: Record<string, number> = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  };
+
+  // dd/mm/yyyy or dd-mm-yyyy (4-digit year)
+  const dmy4 = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmy4) {
+    return new Date(parseInt(dmy4[3]), parseInt(dmy4[2]) - 1, parseInt(dmy4[1]));
   }
 
-  // yyyy-mm-dd
-  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // dd/mm/yy or dd-mm-yy (2-digit year)
+  const dmy2 = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+  if (dmy2) {
+    const yr = parseInt(dmy2[3]);
+    return new Date(yr > 50 ? 1900 + yr : 2000 + yr, parseInt(dmy2[2]) - 1, parseInt(dmy2[1]));
+  }
+
+  // yyyy-mm-dd (ISO)
+  const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) {
     return new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]));
   }
 
   // Mon yyyy (e.g., "Feb 2026") for revenue months
-  const monyyyy = value.match(
+  const monyyyy = v.match(
     /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*[\s\-\/]*(\d{4})$/i
   );
   if (monyyyy) {
-    const months: Record<string, number> = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-    };
-    return new Date(parseInt(monyyyy[2]), months[monyyyy[1].toLowerCase().substring(0, 3)], 1);
+    return new Date(parseInt(monyyyy[2]), MONTHS[monyyyy[1].toLowerCase().substring(0, 3)], 1);
   }
 
-  // dd Mon yyyy
-  const ddmonyyyy = value.match(
-    /^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d{4})$/i
+  // dd Mon yyyy or dd-Mon-yyyy (4-digit year)
+  const ddmonyyyy = v.match(
+    /^(\d{1,2})[\s\-]+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*[\s\-]+(\d{4})$/i
   );
   if (ddmonyyyy) {
-    const months: Record<string, number> = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-    };
     return new Date(
       parseInt(ddmonyyyy[3]),
-      months[ddmonyyyy[2].toLowerCase().substring(0, 3)],
+      MONTHS[ddmonyyyy[2].toLowerCase().substring(0, 3)],
       parseInt(ddmonyyyy[1])
     );
   }
 
-  const d = new Date(value);
+  // dd Mon yy or dd-Mon-yy (2-digit year)
+  const ddmonyy = v.match(
+    /^(\d{1,2})[\s\-]+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*[\s\-]+(\d{2})$/i
+  );
+  if (ddmonyy) {
+    const yr = parseInt(ddmonyy[3]);
+    return new Date(
+      yr > 50 ? 1900 + yr : 2000 + yr,
+      MONTHS[ddmonyy[2].toLowerCase().substring(0, 3)],
+      parseInt(ddmonyy[1])
+    );
+  }
+
+  const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -277,7 +324,9 @@ export function validateAndPreview(
       }
 
       if (!rawValue) {
-        parsed[col.field] = null;
+        if (parsed[col.field] === undefined) {
+          parsed[col.field] = null;
+        }
         continue;
       }
 
@@ -289,6 +338,11 @@ export function validateAndPreview(
             (parsed._errors as string[]).push(`${col.label}: invalid number`);
           }
           parsed[col.field] = num;
+          // Auto-detect currency from amount value for invoices (e.g., €1,234 → EUR)
+          if (target === "invoices" && (col.field === "total" || col.field === "amount") && !parsed.currency) {
+            const detected = detectCurrency(rawValue);
+            if (detected) parsed.currency = detected;
+          }
           break;
         }
         case "date": {
@@ -354,6 +408,7 @@ export function transformForInsert(
             total: row.total || 0,
             subtotal: row.total || 0,
             taxTotal: 0,
+            currency: (row.currency as string) || "INR",
             issueDate: row.issueDate
               ? new Date(row.issueDate as string)
               : new Date(),

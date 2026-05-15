@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/forecast — Revenue forecasting with trend analysis and cash flow projection
  */
 export async function GET() {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const now = new Date();
 
     // Get last 6 months of revenue and expenses
@@ -15,17 +16,19 @@ export async function GET() {
 
     const [revenues, expenses, invoices] = await Promise.all([
       prisma.revenue.findMany({
-        where: { userId, month: { gte: sixMonthsAgo } },
+      take: 10000,
+        where: { userId, organizationId, month: { gte: sixMonthsAgo } },
         orderBy: { month: "asc" },
       }),
       prisma.expense.findMany({
-        where: { userId, date: { gte: sixMonthsAgo } },
+      take: 10000,
+        where: { userId, organizationId, date: { gte: sixMonthsAgo } },
         orderBy: { date: "asc" },
       }),
       prisma.invoice.findMany({
-        where: { userId, status: { in: ["sent", "partial"] }, dueDate: { gte: now } },
+      take: 10000,
+        where: { userId, organizationId, status: { in: ["sent", "partial"] }, dueDate: { gte: now } },
         orderBy: { dueDate: "asc" },
-        take: 20,
       }),
     ]);
 
@@ -60,7 +63,6 @@ export async function GET() {
 
     function linearForecast(values: number[], periods: number): number[] {
       const n = values.length;
-      if (n === 0) return Array(periods).fill(0);
       const xMean = (n - 1) / 2;
       const yMean = values.reduce((s, v) => s + v, 0) / n;
       let num = 0, den = 0;
@@ -68,7 +70,7 @@ export async function GET() {
         num += (i - xMean) * (values[i] - yMean);
         den += (i - xMean) * (i - xMean);
       }
-      const slope = den === 0 ? 0 : num / den;
+      const slope = num / den;
       const intercept = yMean - slope * xMean;
       return Array.from({ length: periods }, (_, i) => Math.max(0, Math.round(intercept + slope * (n + i))));
     }
@@ -89,8 +91,8 @@ export async function GET() {
     });
 
     // Cash flow scenarios
-    const avgRevenue = revenueValues.length > 0 ? revenueValues.reduce((s, v) => s + v, 0) / revenueValues.length : 0;
-    const avgExpenses = expenseValues.length > 0 ? expenseValues.reduce((s, v) => s + v, 0) / expenseValues.length : 0;
+    const avgRevenue = revenueValues.reduce((s, v) => s + v, 0) / revenueValues.length;
+    const avgExpenses = expenseValues.reduce((s, v) => s + v, 0) / expenseValues.length;
 
     const scenarios = {
       optimistic: {
@@ -141,11 +143,11 @@ export async function GET() {
         avgMonthlyExpenses: Math.round(avgExpenses),
         avgMonthlyProfit: Math.round(avgRevenue - avgExpenses),
         growthRate,
-        runway: avgExpenses > avgRevenue ? Math.round(totalPipeline / (avgExpenses - avgRevenue)) : Infinity,
+        runway: avgExpenses > avgRevenue ? Math.round(totalPipeline / (avgExpenses - avgRevenue)) : null,
       },
     });
   } catch (error) {
-    console.error("Forecast error:", error);
+    log.error("Forecast error", { module: "forecast", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

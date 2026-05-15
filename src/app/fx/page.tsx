@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { ArrowRightLeft, RefreshCw } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface Rate {
   code: string;
@@ -29,10 +30,12 @@ export default function FxPage() {
     try {
       const res = await fetch(`/api/fx/rates?from=${from}&to=${to}&amount=${amount}`);
       const data = await res.json();
-      setRates(data.allRates || []);
-      setIsLive(data.isLive);
-      setConverted(data.converted);
-      setRate(data.rate);
+      if (data && !data.error) {
+        setRates(data.allRates || []);
+        setIsLive(data.isLive ?? false);
+        setConverted(data.converted ?? 0);
+        setRate(data.rate ?? 0);
+      }
     } catch (err) {
       clientLog.error("Failed to load FX rates", "fx", "load", err);
     } finally {
@@ -115,6 +118,18 @@ export default function FxPage() {
       </div>
 
       {/* Rate Table */}
+      {rates.length === 0 ? (
+        <EmptyState
+          icon={ArrowRightLeft}
+          title="No exchange rates available"
+          description="FX rates will appear once the rate service is connected. Try refreshing."
+          action={
+            <button className="btn btn-primary" onClick={loadRates}>
+              <RefreshCw size={14} /> Refresh Rates
+            </button>
+          }
+        />
+      ) : (
       <div className="table-container">
         <div className="table-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>All Rates (vs INR)</h3>
@@ -155,6 +170,7 @@ export default function FxPage() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

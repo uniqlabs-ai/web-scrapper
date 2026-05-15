@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
 import { calculateGSTSummary } from "@/lib/financial-intelligence";
+import { log, toLogError } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
 
     const fromParam = searchParams.get("from");
@@ -18,11 +19,11 @@ export async function GET(request: NextRequest) {
     const from = fromParam ? new Date(fromParam) : quarterStart;
     const to = toParam ? new Date(toParam) : quarterEnd;
 
-    const summary = await calculateGSTSummary(userId, from, to);
+    const summary = await calculateGSTSummary(userId, organizationId, from, to);
 
     return NextResponse.json(summary);
   } catch (error) {
-    console.error("GST summary error:", error);
+    log.error("GST summary error", { module: "reports", action: "tax", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to generate GST summary" },
       { status: 500 }

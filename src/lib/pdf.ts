@@ -32,6 +32,7 @@ interface InvoicePDFData {
   isInterState: boolean;
   currency: string;
   notes?: string;
+  paymentUpiId?: string;
 }
 
 function formatCurrency(amount: number, currency: string = "INR"): string {
@@ -238,6 +239,21 @@ export function generateInvoicePDF(data: InvoicePDFData): Buffer {
     doc.setTextColor(60);
     const noteLines = doc.splitTextToSize(data.notes, contentWidth);
     doc.text(noteLines, margin, y);
+  }
+
+  // Payment Link
+  if (data.paymentUpiId && data.status !== "paid") {
+    y += (data.notes ? 10 : 20);
+    const company = encodeURIComponent(data.companyName || "Company");
+    const inv = encodeURIComponent(data.invoiceNumber);
+    const upiLink = `upi://pay?pa=${data.paymentUpiId}&pn=${company}&am=${data.total}&tr=${inv}&cu=INR`;
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(59, 130, 246); // blue
+    doc.text("Pay Instantly via UPI", totalsX, y);
+    doc.textWithLink("Click here to pay", totalsX, y + 5, { url: upiLink });
+    doc.setTextColor(0);
   }
 
   // Footer

@@ -29,7 +29,7 @@ describe('GET /api/dashboard', () => {
   it('returns KPIs', async () => {
     const res = await GET(); const d = await res.json();
     expect(res.status).toBe(200);
-    expect(d.monthlyRevenue).toBe(200000);
+    expect(d.monthlyRevenue).toBe(220000);
     expect(d.outstandingInvoices.count).toBe(2);
     expect(d.totalExpensesThisMonth).toBe(120000);
   });

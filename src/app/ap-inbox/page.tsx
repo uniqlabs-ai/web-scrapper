@@ -7,6 +7,7 @@ import { useToast } from "@/components/toast";
 import { formatCurrency } from "@/lib/currency";
 import { StaggerContainer, SlideUp, FadeIn } from "@/components/animations";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface InboxItem {
   approvalId: string;
@@ -117,9 +118,11 @@ export default function APInboxPage() {
               <div style={{ padding: 32, textAlign: "center", color: "#6B7280" }}>Syncing emails...</div>
             ) : items.length === 0 ? (
               <FadeIn delay={0.3} style={{ padding: 40, textAlign: "center" }}>
-                <CheckCircle size={40} style={{ color: "#10B981", margin: "0 auto 16px", opacity: 0.8 }} />
-                <div style={{ color: "#D1D5DB", fontWeight: 600 }}>Inbox Zero!</div>
-                <div style={{ color: "#6B7280", fontSize: 13, marginTop: 4 }}>All bills are processed.</div>
+                <EmptyState
+                  icon={CheckCircle}
+                  title="Inbox Zero!"
+                  description="All bills are processed. New vendor invoices will appear here automatically."
+                />
               </FadeIn>
             ) : (
               items.map((item, idx) => (

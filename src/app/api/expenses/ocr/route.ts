@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
 
-const userId = "demo-user-00000000-0000-0000-0000";
-
+const OcrJsonSchema = z.object({
+  image: z.string().min(1, "Base64 image data is required"),
+  mimeType: z.string().max(50).optional(),
+  fileName: z.string().max(200).optional(),
+});
 const OCR_PROMPT = `You are a receipt/invoice OCR system. Analyze this image and extract structured data.
 
 Return ONLY a JSON object with these fields (use null for any field you cannot extract):
@@ -28,6 +34,7 @@ Rules:
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId, organizationId } = await requireTenant();
     const contentType = request.headers.get("content-type") || "";
 
     let imageBase64: string;
@@ -48,13 +55,14 @@ export async function POST(request: NextRequest) {
       fileName = file.name || "receipt.jpg";
     } else {
       // JSON body with base64 image
-      const body = await request.json();
-      if (!body.image) {
-        return NextResponse.json({ error: "No image provided" }, { status: 400 });
+      const rawBody = await request.json();
+      const parsed = OcrJsonSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
       }
-      imageBase64 = body.image.replace(/^data:image\/\w+;base64,/, "");
-      mimeType = body.mimeType || "image/jpeg";
-      fileName = body.fileName || "receipt.jpg";
+      imageBase64 = parsed.data.image.replace(/^data:image\/\w+;base64,/, "");
+      mimeType = parsed.data.mimeType || "image/jpeg";
+      fileName = parsed.data.fileName || "receipt.jpg";
     }
 
     // Call Gemini Vision
@@ -79,19 +87,7 @@ export async function POST(request: NextRequest) {
       const cleaned = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
       extracted = JSON.parse(cleaned);
     } else {
-      // Fallback: mock extraction when no API key
-      extracted = {
-        amount: 1500,
-        vendor: "Sample Store",
-        date: new Date().toISOString().split("T")[0],
-        gstNumber: null,
-        category: "Miscellaneous",
-        description: "Receipt scan (Gemini API key not configured)",
-        lineItems: [],
-        currency: "INR",
-        paymentMethod: null,
-        confidence: 0.5,
-      };
+      return NextResponse.json({ error: "OCR Service (Gemini API) is currently unconfigured or unavailable." }, { status: 503 });
     }
 
     // Save receipt to database
@@ -122,7 +118,7 @@ export async function POST(request: NextRequest) {
       extracted,
     });
   } catch (error) {
-    console.error("OCR error:", error);
+    log.error("OCR error", { module: "expenses", action: "ocr", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to process receipt" }, { status: 500 });
   }
 }

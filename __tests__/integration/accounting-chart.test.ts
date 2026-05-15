@@ -53,18 +53,36 @@ describe('GET /api/accounting/chart', () => {
 });
 
 describe('POST /api/accounting/chart', () => {
-  it('creates a balanced journal entry', async () => {
+  it('creates a balanced journal entry and tests GET views', async () => {
     const res = await POST(req('POST','http://localhost:3008/api/accounting/chart',{
       date: '2025-04-01',
-      narration: 'Sales Revenue',
+      narration: 'Loan',
       entries: [
         { accountCode: '1000', debit: 100000, credit: 0 },
-        { accountCode: '6000', debit: 0, credit: 100000 },
+        { accountCode: '3000', debit: 0, credit: 100000 },
       ],
     }));
     expect(res.status).toBe(201);
     const d = await res.json();
     expect(d.id).toMatch(/^JE-/);
+    
+    await POST(req('POST','http://localhost:3008/api/accounting/chart',{
+      date: '2025-04-02',
+      narration: 'Pay Loan',
+      entries: [
+        { accountCode: '3000', debit: 50000, credit: 0 },
+        { accountCode: '1000', debit: 0, credit: 50000 },
+      ],
+    }));
+
+    // Now test GET with the entries populated
+    const getRes = await GET(req('GET','http://localhost:3008/api/accounting/chart?view=balance-sheet'));
+    const getD = await getRes.json();
+    expect(getD.balanceSheet.isBalanced).toBe(true);
+
+    const getRes2 = await GET(req('GET','http://localhost:3008/api/accounting/chart?view=journal'));
+    const getD2 = await getRes2.json();
+    expect(getD2.entries.length).toBeGreaterThan(0);
   });
 
   it('rejects unbalanced journal entry', async () => {

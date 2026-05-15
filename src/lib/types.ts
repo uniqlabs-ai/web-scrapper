@@ -31,6 +31,7 @@ export interface RevenueData {
   previousMRR: number;
   growth: number;
   history: { month: string; amount: number }[];
+  totalMonthlyRevenue: number;
 }
 
 export interface GSTBreakdown {

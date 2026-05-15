@@ -3,20 +3,18 @@ import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    recurringExpense: { findFirst: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"AWS","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"frequency":"monthly","nextDate":"2026-05-13T00:31:19.302Z"}), update: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"AWS","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"frequency":"monthly","nextDate":"2026-05-13T00:31:19.302Z"}), delete: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"AWS","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"frequency":"monthly","nextDate":"2026-05-13T00:31:19.302Z"}) },
-    bankTransaction: { findMany: vi.fn().mockResolvedValue([{"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Payment","date":"2026-05-13T00:31:19.302Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"credit","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"accountId":"acc-1"}]) }
+    recurringExpense: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    bankTransaction: { findMany: vi.fn() }
   },
 }));
 vi.mock('@/lib/tenant', () => ({ requireTenant: vi.fn(), TenantError: class extends Error { constructor(m:string){super(m);this.name='TenantError'} } }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
 
 import { prisma } from '@/lib/prisma';
 import { requireTenant } from '@/lib/tenant';
 import { GET, PUT, DELETE } from '@/app/api/recurring-expenses/[id]/route';
 
-import { mockPrisma } from '../helpers/prisma-mock';
-const mp = mockPrisma(prisma);
+const mp = vi.mocked(prisma);
 const mt = vi.mocked(requireTenant);
 
 beforeEach(() => {
@@ -24,53 +22,90 @@ beforeEach(() => {
   mt.mockResolvedValue({ userId: 'u1', organizationId: 'org-1' });
 });
 
-function req(method='GET', body?:unknown, id: string='test-id'): [NextRequest, { params: Promise<{id:string}> }] {
+function req(method='GET', body?:unknown, id: string='exp-1'): [NextRequest, { params: Promise<{id:string}> }] {
   const init: Record<string,unknown> = { method };
   if (body) { init.body=JSON.stringify(body); init.headers={'Content-Type':'application/json'}; }
-  return [new NextRequest(new URL('http://localhost:3008/api/recurring-expenses/[id]'), init), { params: Promise.resolve({ id }) }];
+  return [new NextRequest(new URL(`http://localhost:3008/api/recurring-expenses/${id}`), init), { params: Promise.resolve({ id }) }];
 }
 
-describe('GET /api/recurring-expenses/[id]', () => {
-  it('handles GET successfully', async () => {
-    const res = await GET(...req());
-    expect(res.status).toBeLessThan(600);
-    const data = await res.json();
-    expect(data).toBeDefined();
+describe('recurring-expenses/[id]', () => {
+  describe('GET', () => {
+    it('returns 404 if not found', async () => {
+      (mp.recurringExpense.findFirst as any).mockResolvedValue(null);
+      const res = await GET(...req());
+      expect(res.status).toBe(404);
+    });
+
+    it('returns recurring expense details and related transactions', async () => {
+      (mp.recurringExpense.findFirst as any).mockResolvedValue({ id: 'exp-1', vendor: 'AWS', description: 'AWS Cloud', aliases: '["Amazon Web"]', amount: 500, category: 'Software' });
+      (mp.bankTransaction.findMany as any).mockResolvedValue([
+        { id: 'bt-1', description: 'Amazon Web Services', amount: 500, date: new Date() }
+      ]);
+
+      const res = await GET(...req());
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.item.id).toBe('exp-1');
+      expect(data.matchedTransactions.length).toBe(1);
+    });
+
+    it('returns 500 on error', async () => {
+      mt.mockRejectedValue(new Error('fail'));
+      const res = await GET(...req());
+      expect(res.status).toBe(500);
+    });
   });
 
-  it('handles tenant error', async () => {
-    mt.mockRejectedValue(new Error('fail'));
-    const res = await GET(...req());
-    expect(res.status).toBeGreaterThanOrEqual(400);
-  });
-});
+  describe('PUT', () => {
+    it('returns 200 and ignores invalid fields', async () => {
+      (mp.recurringExpense.findFirst as any).mockResolvedValue({ id: 'exp-1' });
+      (mp.recurringExpense.update as any).mockResolvedValue({ id: 'exp-1' });
+      const res = await PUT(...req('PUT', { completelyInvalid: true })); 
+      expect(res.status).toBe(200);
+      expect(mp.recurringExpense.update).toHaveBeenCalledWith(expect.objectContaining({ data: {} }));
+    });
 
-describe('PUT /api/recurring-expenses/[id]', () => {
-  it('handles PUT successfully', async () => {
-    const res = await PUT(...req('PUT', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeLessThan(600);
-    const data = await res.json();
-    expect(data).toBeDefined();
+    it('returns 404 if expense not found', async () => {
+      (mp.recurringExpense.findFirst as any).mockResolvedValue(null);
+      const res = await PUT(...req('PUT', { vendor: 'AWS', amount: 600, frequency: 'monthly', status: 'active', category: 'Software' }));
+      expect(res.status).toBe(404);
+    });
+
+    it('updates expense successfully', async () => {
+      (mp.recurringExpense.findFirst as any).mockResolvedValue({ id: 'exp-1' });
+      (mp.recurringExpense.update as any).mockResolvedValue({ id: 'exp-1', vendor: 'AWS', amount: 600 });
+      
+      const res = await PUT(...req('PUT', { vendor: 'AWS', amount: 600, frequency: 'monthly', status: 'active', category: 'Software' }));
+      expect(res.status).toBe(200);
+      expect(mp.recurringExpense.update).toHaveBeenCalled();
+    });
+
+    it('returns 500 on error', async () => {
+      mt.mockRejectedValue(new Error('fail'));
+      const res = await PUT(...req('PUT', { vendor: 'AWS', amount: 600, frequency: 'monthly', status: 'active', category: 'Software' }));
+      expect(res.status).toBe(500);
+    });
   });
 
-  it('handles tenant error', async () => {
-    mt.mockRejectedValue(new Error('fail'));
-    const res = await PUT(...req('PUT', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeGreaterThanOrEqual(400);
-  });
-});
+  describe('DELETE', () => {
+    it('returns 404 if not found', async () => {
+      (mp.recurringExpense.findFirst as any).mockResolvedValue(null);
+      const res = await DELETE(...req());
+      expect(res.status).toBe(404);
+    });
 
-describe('DELETE /api/recurring-expenses/[id]', () => {
-  it('handles DELETE successfully', async () => {
-    const res = await DELETE(...req());
-    expect(res.status).toBeLessThan(600);
-    const data = await res.json();
-    expect(data).toBeDefined();
-  });
+    it('deletes expense successfully', async () => {
+      (mp.recurringExpense.findFirst as any).mockResolvedValue({ id: 'exp-1' });
+      (mp.recurringExpense.delete as any).mockResolvedValue({ id: 'exp-1' });
+      const res = await DELETE(...req());
+      expect(res.status).toBe(200);
+      expect(mp.recurringExpense.delete).toHaveBeenCalled();
+    });
 
-  it('handles tenant error', async () => {
-    mt.mockRejectedValue(new Error('fail'));
-    const res = await DELETE(...req());
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    it('returns 500 on error', async () => {
+      mt.mockRejectedValue(new Error('fail'));
+      const res = await DELETE(...req());
+      expect(res.status).toBe(500);
+    });
   });
 });

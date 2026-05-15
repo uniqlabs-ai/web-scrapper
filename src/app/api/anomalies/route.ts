@@ -1,25 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/anomalies — Detect unusual spending patterns
  */
 export async function GET() {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const now = new Date();
 
     // Get current and previous month expenses
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const _prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const _prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
     // Get 6 months for baseline
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
 
     const expenses = await prisma.expense.findMany({
-      where: { userId, date: { gte: sixMonthsAgo } },
+      take: 10000,
+      where: { userId, organizationId, date: { gte: sixMonthsAgo } },
       include: { category: true },
       orderBy: { date: "desc" },
     });
@@ -71,14 +73,15 @@ export async function GET() {
       const currentTotal = monthlyTotals[monthKeys[monthKeys.length - 1]] || 0;
       const prevTotal = monthlyTotals[monthKeys[monthKeys.length - 2]] || 0;
       const allTotals = Object.values(monthlyTotals);
-      const avgTotal = allTotals.reduce((s, t) => s + t, 0) / allTotals.length;
+      const _avgTotal = allTotals.reduce((s, t) => s + t, 0) / allTotals.length;
 
       if (currentTotal > prevTotal * 1.3 && currentTotal > 10000) {
+        const pctIncrease = prevTotal > 0 ? Math.round((currentTotal / prevTotal - 1) * 100) : 100;
         anomalies.push({
           type: "spike",
           severity: "medium",
           title: "Overall spending increase",
-          description: `This month: ₹${currentTotal.toLocaleString("en-IN")} vs last month: ₹${prevTotal.toLocaleString("en-IN")} (+${Math.round((currentTotal / prevTotal - 1) * 100)}%)`,
+          description: `This month: ₹${currentTotal.toLocaleString("en-IN")} vs last month: ₹${prevTotal.toLocaleString("en-IN")} (+${pctIncrease}%)`,
           amount: currentTotal,
           threshold: prevTotal,
         });
@@ -104,11 +107,8 @@ export async function GET() {
       }
     }
 
-    // Budget check
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { organizationId: true } });
-    const budgets = user?.organizationId
-      ? await prisma.budgetThreshold.findMany({ where: { organizationId: user.organizationId } })
-      : [];
+    // Budget check — use organizationId from requireTenant() directly
+    const budgets = await prisma.budgetThreshold.findMany({ where: { organizationId }, take: 500 });
     for (const b of budgets) {
       const catExpenses = expenses.filter(
         (e) => e.category?.name === b.category && e.date >= currentMonthStart
@@ -143,7 +143,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Anomaly detection error:", error);
+    log.error("Anomaly detection error", { module: "anomalies", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

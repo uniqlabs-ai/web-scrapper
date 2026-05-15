@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const GstReturnsQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, "month must be YYYY-MM").optional(),
+  type: z.enum(["gstr1", "gstr3b"]).default("gstr3b"),
+});
 
 /**
  * GET /api/gst/returns — Generate GSTR-1 (sales) and GSTR-3B (summary) data
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
-    const month = searchParams.get("month"); // YYYY-MM format
-    const type = searchParams.get("type") || "gstr3b"; // gstr1 | gstr3b
+
+    const parsed = GstReturnsQuerySchema.safeParse({
+      month: searchParams.get("month") || undefined,
+      type: searchParams.get("type") || undefined,
+    });
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: parsed.error.issues }, { status: 400 });
+    }
+    const { month, type } = parsed.data;
 
     const now = new Date();
     const targetMonth = month
@@ -22,8 +36,10 @@ export async function GET(request: NextRequest) {
     if (type === "gstr1") {
       // GSTR-1: Sales register with invoice-level detail
       const invoices = await prisma.invoice.findMany({
+      take: 10000,
         where: {
           userId,
+          organizationId,
           issueDate: { gte: targetMonth, lte: monthEnd },
           status: { not: "draft" },
         },
@@ -101,15 +117,18 @@ export async function GET(request: NextRequest) {
       // GSTR-3B: Monthly summary return
       const [invoices, expenses] = await Promise.all([
         prisma.invoice.findMany({
+      take: 10000,
           where: {
             userId,
+            organizationId,
             issueDate: { gte: targetMonth, lte: monthEnd },
             status: { not: "draft" },
           },
           include: { lineItems: true },
         }),
         prisma.expense.findMany({
-          where: { userId, date: { gte: targetMonth, lte: monthEnd } },
+      take: 10000,
+          where: { userId, organizationId, date: { gte: targetMonth, lte: monthEnd } },
         }),
       ]);
 
@@ -162,7 +181,7 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("GST returns error:", error);
+    log.error("GST returns error", { module: "gst", action: "returns", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to generate GST return data" }, { status: 500 });
   }
 }

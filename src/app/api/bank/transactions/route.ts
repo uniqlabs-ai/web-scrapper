@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { logAudit } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
+import { UpdateBankTransactionSchema, CreateBankTransactionSchema } from "@/lib/schemas";
 
 /**
  * GET /api/bank/transactions — List bank transactions
@@ -9,7 +14,7 @@ import { getAuthUserId } from "@/lib/auth";
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
 
     const bankAccountId = searchParams.get("bankAccountId");
@@ -18,11 +23,11 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get("category");
     const type = searchParams.get("type"); // debit | credit
     const search = searchParams.get("search");
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
+    const startDate = searchParams.get("startDate") || searchParams.get("from");
+    const endDate = searchParams.get("endDate") || searchParams.get("to");
     const isReconciled = searchParams.get("isReconciled");
 
-    const where: Record<string, unknown> = { userId };
+    const where: Prisma.BankTransactionWhereInput = { userId };
 
     if (bankAccountId) where.bankAccountId = bankAccountId;
     if (category) where.category = category;
@@ -38,30 +43,29 @@ export async function GET(request: NextRequest) {
       ];
     }
     if (startDate || endDate) {
-      where.date = {};
-      if (startDate)
-        (where.date as Record<string, unknown>).gte = new Date(startDate);
-      if (endDate)
-        (where.date as Record<string, unknown>).lte = new Date(endDate);
+      const dateFilter: Prisma.DateTimeFilter = {};
+      if (startDate) dateFilter.gte = new Date(startDate);
+      if (endDate) dateFilter.lte = new Date(endDate);
+      where.date = dateFilter;
     }
 
     const [transactions, total] = await Promise.all([
       prisma.bankTransaction.findMany({
-        where: where as any,
+      take: 500,
+        where,
         orderBy: { date: "desc" },
         skip: (page - 1) * limit,
-        take: limit,
         include: {
           bankAccount: { select: { name: true, bankName: true } },
         },
       }),
-      prisma.bankTransaction.count({ where: where as any }),
+      prisma.bankTransaction.count({ where }),
     ]);
 
     // Summary stats
     const stats = await prisma.bankTransaction.groupBy({
       by: ["type"],
-      where: { userId } as any,
+      where: { userId },
       _sum: { amount: true },
       _count: true,
     });
@@ -86,7 +90,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Bank transactions error:", error);
+    log.error("Bank transactions error", { module: "bank", action: "transactions", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to fetch transactions" },
       { status: 500 }
@@ -100,8 +104,20 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
-    const body = await request.json();
+    const limited = rateLimit(request, { windowSec: 60, max: 30, prefix: "bank-tx-patch" });
+    if (limited) return limited;
+    const { userId, organizationId } = await requireTenant();
+    const rawBody = await request.json();
+
+    const parsed = UpdateBankTransactionSchema.safeParse(rawBody);
+
+    if (!parsed.success) {
+
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
+
+    }
+
+    const body = parsed.data;
     const { id, ...updates } = body;
 
     if (!id) {
@@ -123,11 +139,61 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
+    logAudit({ userId, action: "update", resource: "bankTransaction", resourceId: id, details: updates });
     return NextResponse.json(transaction);
   } catch (error) {
-    console.error("Update transaction error:", error);
+    log.error("Update transaction error", { module: "bank", action: "transactions", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to update transaction" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/bank/transactions — Create a single transaction manually (e.g., resolving conflicts)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const limited = rateLimit(request, { windowSec: 60, max: 20, prefix: "bank-tx-create" });
+    if (limited) return limited;
+    const { userId, organizationId } = await requireTenant();
+    const rawBody = await request.json();
+
+    const parsed = CreateBankTransactionSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
+    }
+    const { date, description, amount, type, bankAccountId, category, vendor, reference, hash } = parsed.data;
+
+    // Verify bank account belongs to user
+    const account = await prisma.bankAccount.findFirst({ where: { id: bankAccountId, userId } });
+    if (!account) {
+      return NextResponse.json({ error: "Bank account not found" }, { status: 404 });
+    }
+
+    const tx = await prisma.bankTransaction.create({
+      data: {
+        date: new Date(date),
+        description,
+        amount,
+        type,
+        bankAccountId,
+        userId,
+        category,
+        vendor,
+        reference,
+        hash: hash || undefined,
+        source: "manual",
+      }
+    });
+
+    logAudit({ userId, action: "create", resource: "bankTransaction", resourceId: tx.id, details: { amount, type, bankAccountId } });
+    return NextResponse.json(tx);
+  } catch (error: unknown) {
+    log.error("Create transaction error", { module: "bank", action: "transactions", error: toLogError(error) });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to create transaction" },
       { status: 500 }
     );
   }

@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/accounting/trial-balance — Trial Balance report
@@ -46,6 +48,7 @@ const CHART_OF_ACCOUNTS = [
 
 export async function GET() {
   try {
+    await requireTenant();
     // Trial balance: list all accounts with debit/credit balances
     // Since journal entries are in-memory in the accounting API,
     // we show the chart structure with zero balances as a template
@@ -72,7 +75,7 @@ export async function GET() {
       note: "Trial balance populates from journal entries posted via POST /api/accounting/chart",
     });
   } catch (error) {
-    console.error("Trial balance error:", error);
+    log.error("Trial balance error", { module: "accounting", action: "trial-balance", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

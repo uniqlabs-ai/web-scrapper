@@ -32,7 +32,7 @@ function req(method='GET', body?:unknown, url='http://localhost:3008/api/vendors
 
 describe('GET /api/vendors/fingerprints', () => {
   it('handles GET successfully', async () => {
-    const res = await GET(req());
+    const res = await GET();
     expect(res.status).toBeLessThan(600);
     const data = await res.json();
     expect(data).toBeDefined();
@@ -40,7 +40,7 @@ describe('GET /api/vendors/fingerprints', () => {
 
   it('handles tenant error', async () => {
     mt.mockRejectedValue(new Error('fail'));
-    const res = await GET(req());
+    const res = await GET();
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 });

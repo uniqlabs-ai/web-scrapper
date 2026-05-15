@@ -78,6 +78,21 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Tab bar utility — horizontal scroll on small screens */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Layout */

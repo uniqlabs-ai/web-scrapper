@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/reports/comparison — Period comparison (this vs last month/quarter/year)
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
     const period = searchParams.get("period") || "month"; // month | quarter | year
 
@@ -40,10 +41,10 @@ export async function GET(request: NextRequest) {
     }
 
     const [curRevenues, curExpenses, prevRevenues, prevExpenses] = await Promise.all([
-      prisma.revenue.findMany({ where: { userId, month: { gte: currentFrom, lte: currentTo } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: currentFrom, lte: currentTo } }, include: { category: true } }),
-      prisma.revenue.findMany({ where: { userId, month: { gte: previousFrom, lte: previousTo } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: previousFrom, lte: previousTo } }, include: { category: true } }),
+      prisma.revenue.findMany({ where: { userId, organizationId, month: { gte: currentFrom, lte: currentTo } }, take: 10_000 }),
+      prisma.expense.findMany({ where: { userId, organizationId, date: { gte: currentFrom, lte: currentTo } }, include: { category: true }, take: 10_000 }),
+      prisma.revenue.findMany({ where: { userId, organizationId, month: { gte: previousFrom, lte: previousTo } }, take: 10_000 }),
+      prisma.expense.findMany({ where: { userId, organizationId, date: { gte: previousFrom, lte: previousTo } }, include: { category: true }, take: 10_000 }),
     ]);
 
     const curRev = curRevenues.reduce((s, r) => s + Number(r.amount), 0);
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
       categoryComparison,
     });
   } catch (error) {
-    console.error("Comparison error:", error);
+    log.error("Comparison error", { module: "reports", action: "comparison", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

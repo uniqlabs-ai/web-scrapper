@@ -18,17 +18,20 @@ export interface PnLReport {
 
 export async function generatePnL(
   userId: string,
+  organizationId: string,
   from: Date,
   to: Date
 ): Promise<PnLReport> {
   const [revenues, expenses] = await Promise.all([
     prisma.revenue.findMany({
-      where: { userId, month: { gte: from, lte: to } },
+      where: { userId, organizationId, month: { gte: from, lte: to } },
       include: { client: true },
+      take: 10_000, // RELIABILITY: Safety ceiling
     }),
     prisma.expense.findMany({
-      where: { userId, date: { gte: from, lte: to } },
+      where: { userId, organizationId, date: { gte: from, lte: to } },
       include: { category: true },
+      take: 10_000, // RELIABILITY: Safety ceiling
     }),
   ]);
 
@@ -83,6 +86,7 @@ export interface CashFlowProjection {
 
 export async function projectCashFlow(
   userId: string,
+  organizationId: string,
   months: number = 6
 ): Promise<{
   projections: CashFlowProjection[];
@@ -95,13 +99,15 @@ export async function projectCashFlow(
 
   const [revenues, expenses, org] = await Promise.all([
     prisma.revenue.findMany({
-      where: { userId, month: { gte: threeMonthsAgo } },
+      where: { userId, organizationId, month: { gte: threeMonthsAgo } },
+      take: 5000, // RELIABILITY: Safety ceiling
     }),
     prisma.expense.findMany({
-      where: { userId, date: { gte: threeMonthsAgo } },
+      where: { userId, organizationId, date: { gte: threeMonthsAgo } },
+      take: 5000, // RELIABILITY: Safety ceiling
     }),
-    prisma.organization.findFirst({
-      where: { users: { some: { id: userId } } },
+    prisma.organization.findUnique({
+      where: { id: organizationId },
     }),
   ]);
 
@@ -159,6 +165,104 @@ export async function projectCashFlow(
   return { projections, currentBalance, projectedRunway: runwayMonths };
 }
 
+export interface CashFlowOutlookSnapshot {
+  label: string;
+  days: number;
+  projectedBalance: number;
+  expectedInflows: number;
+  expectedOutflows: number;
+  risk: "green" | "amber" | "red";
+}
+
+export async function projectCashFlowOutlook(
+  userId: string,
+  organizationId: string
+): Promise<{
+  snapshots: CashFlowOutlookSnapshot[];
+  currentBalance: number;
+  avgMonthlyBurn: number;
+}> {
+  const now = new Date();
+  const threeMonthsAgo = new Date(now.getTime() - 90 * 86400000);
+
+  const [revenues, expenses, org, unpaidInvoices, recurringItems] = await Promise.all([
+    prisma.revenue.findMany({ where: { userId, organizationId, month: { gte: threeMonthsAgo } }, take: 5000 }),
+    prisma.expense.findMany({ where: { userId, organizationId, date: { gte: threeMonthsAgo } }, take: 5000 }),
+    prisma.organization.findUnique({ where: { id: organizationId } }),
+    prisma.invoice.findMany({
+      where: { userId, organizationId, status: { in: ["sent", "overdue"] } },
+      select: { total: true, dueDate: true },
+      take: 1000, // RELIABILITY: Safety ceiling
+    }),
+    prisma.recurringExpense.findMany({
+      where: { userId, organizationId, isActive: true },
+      select: { amount: true, frequency: true },
+      take: 500, // RELIABILITY: Safety ceiling
+    }),
+  ]);
+
+  const currentBalance = Number(org?.cashInBank ?? 0);
+
+  // Monthly averages from last 3 months
+  const revenueByMonth = new Map<string, number>();
+  for (const r of revenues) {
+    const key = `${r.month.getFullYear()}-${r.month.getMonth()}`;
+    revenueByMonth.set(key, (revenueByMonth.get(key) || 0) + Number(r.amount));
+  }
+  const expenseByMonth = new Map<string, number>();
+  for (const e of expenses) {
+    const key = `${e.date.getFullYear()}-${e.date.getMonth()}`;
+    expenseByMonth.set(key, (expenseByMonth.get(key) || 0) + Number(e.amount));
+  }
+
+  const avgMonthlyInflow = revenueByMonth.size > 0
+    ? Array.from(revenueByMonth.values()).reduce((s, v) => s + v, 0) / revenueByMonth.size : 0;
+  const avgMonthlyOutflow = expenseByMonth.size > 0
+    ? Array.from(expenseByMonth.values()).reduce((s, v) => s + v, 0) / expenseByMonth.size : 0;
+  const avgMonthlyBurn = avgMonthlyOutflow - avgMonthlyInflow;
+
+  // Monthly recurring obligation
+  const monthlyRecurring = recurringItems.reduce((sum, r) => {
+    const amt = Number(r.amount);
+    if (r.frequency === "weekly") return sum + amt * 4.33;
+    if (r.frequency === "monthly") return sum + amt;
+    if (r.frequency === "quarterly") return sum + amt / 3;
+    if (r.frequency === "yearly" || r.frequency === "annual") return sum + amt / 12;
+    return sum + amt;
+  }, 0);
+
+  const snapshots: CashFlowOutlookSnapshot[] = [30, 60, 90].map((days) => {
+    const fraction = days / 30;
+
+    // Expected AR collections within this window
+    const cutoff = new Date(now.getTime() + days * 86400000);
+    const expectedAR = unpaidInvoices
+      .filter((inv) => new Date(inv.dueDate) <= cutoff)
+      .reduce((sum, inv) => sum + Number(inv.total), 0);
+
+    // Weighted collection probability (older invoices less likely)
+    const expectedInflows = Math.round(avgMonthlyInflow * fraction + expectedAR * 0.6);
+    const expectedOutflows = Math.round((avgMonthlyOutflow + monthlyRecurring * 0.3) * fraction);
+    const projectedBalance = Math.round(currentBalance + expectedInflows - expectedOutflows);
+
+    const burnMonths = avgMonthlyBurn > 0 ? currentBalance / avgMonthlyBurn : 99;
+    const risk: "green" | "amber" | "red" =
+      projectedBalance <= 0 ? "red" :
+      burnMonths < 6 || projectedBalance < currentBalance * 0.3 ? "amber" : "green";
+
+    return {
+      label: `${days}-Day`,
+      days,
+      projectedBalance,
+      expectedInflows,
+      expectedOutflows,
+      risk,
+    };
+  });
+
+  return { snapshots, currentBalance, avgMonthlyBurn: Math.round(avgMonthlyBurn) };
+}
+
 export interface GSTSummary {
   period: { from: string; to: string };
   outputTax: { cgst: number; sgst: number; igst: number; total: number };
@@ -170,6 +274,7 @@ export interface GSTSummary {
 
 export async function calculateGSTSummary(
   userId: string,
+  organizationId: string,
   from: Date,
   to: Date
 ): Promise<GSTSummary> {
@@ -177,13 +282,16 @@ export async function calculateGSTSummary(
     prisma.invoice.findMany({
       where: {
         userId,
+        organizationId,
         issueDate: { gte: from, lte: to },
         status: { not: "draft" },
       },
       include: { lineItems: true },
+      take: 10_000, // RELIABILITY: Safety ceiling
     }),
     prisma.expense.findMany({
-      where: { userId, date: { gte: from, lte: to } },
+      where: { userId, organizationId, date: { gte: from, lte: to } },
+      take: 10_000, // RELIABILITY: Safety ceiling
     }),
   ]);
 

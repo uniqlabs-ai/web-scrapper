@@ -19,6 +19,7 @@ import {
 import { useToast } from "@/components/toast";
 import { DateRangeFilter } from "@/components/date-range-filter";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface Suggestion {
   type: string;
@@ -427,16 +428,16 @@ export default function ReconciliationPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: 40, color: "var(--text-secondary)" }}>Loading transactions...</div>
       ) : items.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: 60, background: "var(--bg-card)",
-          borderRadius: 16, border: "1px solid var(--border-color)",
-        }}>
-          <CheckCircle2 size={48} style={{ color: "#22C55E", marginBottom: 12 }} />
-          <h3 style={{ margin: "0 0 8px" }}>All Reconciled!</h3>
-          <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-            All bank transactions have been matched. Import more transactions to continue.
-          </p>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          title="All Reconciled!"
+          description="All bank transactions have been matched. Import more transactions to continue."
+          action={
+            <a href="/import" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+              Import Statement
+            </a>
+          }
+        />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((txn) => (

@@ -1,0 +1,174 @@
+
+ RUN  v4.1.6 /Users/nidishramakrishnan/Work/founderOS/finance
+      Coverage enabled with v8
+
+ ✓ __tests__/integration/tds-compute-deep.test.ts (8 tests) 71ms
+ ✓ __tests__/integration/copilot-query.test.ts (16 tests) 23ms
+ ✓ __tests__/integration/import-pdf-deep.test.ts (8 tests) 44ms
+ ✓ __tests__/integration/bank-import.test.ts (12 tests) 64ms
+ ✓ __tests__/lib/runway.test.ts (12 tests) 103ms
+ ✓ __tests__/integration/payroll-id.test.ts (13 tests) 64ms
+ ✓ __tests__/integration/bank-accounts.test.ts (15 tests) 43ms
+ ✓ __tests__/lib/webhooks.test.ts (14 tests) 387ms
+ ✓ __tests__/integration/payroll-action-deep.test.ts (10 tests) 154ms
+ ✓ __tests__/lib/logger.test.ts (16 tests) 1381ms
+     ✓ log.error calls console.error  1351ms
+ ✓ __tests__/integration/organizations.test.ts (7 tests) 98ms
+ ✓ __tests__/lib/founder-os-jwt.test.ts (17 tests) 1631ms
+     ✓ rejects token in production when FOUNDER_OS_JWT_SECRET is not set  1479ms
+ ✓ __tests__/integration/import-invoice.test.ts (12 tests) 104ms
+ ✓ __tests__/integration/gst-tds-cfo.test.ts (8 tests) 541ms
+ ✓ __tests__/integration/import-invoice-deep.test.ts (9 tests) 189ms
+ ✓ __tests__/integration/reports-pdf.test.ts (6 tests) 168ms
+ ✓ __tests__/lib/rbac.test.ts (34 tests) 1509ms
+     ✓ does not throw on Prisma error (non-blocking)  1481ms
+ ✓ __tests__/integration/detect-recurring.test.ts (12 tests) 137ms
+ ✓ __tests__/integration/invoice-batch.test.ts (8 tests) 906ms
+     ✓ returns 404 when invoice not found  525ms
+ ✓ __tests__/lib/transaction-categorizer.test.ts (82 tests) 70ms
+ ✓ __tests__/integration/tds-compute.test.ts (13 tests) 235ms
+ ✓ __tests__/integration/webhooks-inbound-email-deep.test.ts (7 tests) 74ms
+ ✓ __tests__/integration/reports-cfo-brief-deep.test.ts (7 tests) 205ms
+ ✓ __tests__/integration/accounts.test.ts (8 tests) 16ms
+ ✓ __tests__/integration/alerts-deep.test.ts (12 tests) 125ms
+ ✓ __tests__/lib/financial-intelligence.test.ts (24 tests) 218ms
+ ✓ __tests__/integration/gst-einvoice.test.ts (5 tests) 136ms
+ ✓ __tests__/integration/vendors-id.test.ts (5 tests) 172ms
+ ✓ __tests__/integration/reports.test.ts (8 tests) 65ms
+ ✓ __tests__/integration/integrations-gmail.test.ts (6 tests) 27ms
+ ✓ __tests__/integration/gmail-sync.test.ts (10 tests) 89ms
+ ✓ __tests__/lib/csv-importer.test.ts (40 tests) 31ms
+ ✓ __tests__/integration/webhooks-inbound-email.test.ts (8 tests) 105ms
+ ✓ __tests__/integration/onboarding.test.ts (2 tests) 76ms
+ ✓ __tests__/integration/anomalies-deep.test.ts (11 tests) 182ms
+ ✓ __tests__/integration/v1-webhooks-inbound.test.ts (12 tests) 50ms
+ ✓ __tests__/integration/forecast.test.ts (4 tests) 77ms
+ ✓ __tests__/integration/expenses-id-deep.test.ts (8 tests) 36ms
+ ✓ __tests__/integration/gmail-sync-deep.test.ts (9 tests) 15ms
+ ✓ __tests__/integration/reconciliation.test.ts (10 tests) 158ms
+ ✓ __tests__/integration/bank-transactions.test.ts (13 tests) 137ms
+ ✓ __tests__/integration/invoices-auto-match-deep.test.ts (9 tests) 20ms
+ ✓ __tests__/integration/v1-expenses-deep.test.ts (12 tests) 30ms
+ ✓ __tests__/integration/receipts-deep.test.ts (21 tests) 39ms
+ ✓ __tests__/integration/reports-aging.test.ts (4 tests) 14ms
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles unknown document type falling back to Gemini and failing JSON parse
+CLASSIFICATION RESULT: {"invalid"}
+
+ ✓ __tests__/integration/expenses-deep.test.ts (6 tests) 111ms
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles extractFirstPage throwing unknown error
+CLASSIFICATION RESULT: {"documenttype":"fin","companyname":"acme","lineitems":[]}
+
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles fallback classification for invoice
+CLASSIFICATION RESULT: invoice
+
+ ✓ __tests__/integration/import-smart-deep.test.ts (30 tests) 335ms
+ ✓ __tests__/integration/import-csv-deep.test.ts (11 tests) 230ms
+ ✓ __tests__/integration/invoices-remind-deep.test.ts (7 tests) 111ms
+ ✓ __tests__/integration/bank-accounts-deep.test.ts (14 tests) 68ms
+ ✓ __tests__/integration/recurring-expenses-id-deep.test.ts (11 tests) 91ms
+ ✓ __tests__/integration/import-pdf.test.ts (5 tests) 225ms
+ ✓ __tests__/integration/alerts.test.ts (2 tests) 187ms
+ ✓ __tests__/integration/invoices-id-deep.test.ts (8 tests) 86ms
+ ✓ __tests__/integration/inbound-webhook.test.ts (9 tests) 63ms
+ ✓ __tests__/integration/inbound-email-deep.test.ts (8 tests) 268ms
+ ✓ __tests__/integration/reconciliation-deep.test.ts (21 tests) 149ms
+ ✓ __tests__/integration/expense-breakdown-aging.test.ts (7 tests) 175ms
+ ✓ __tests__/integration/health-deep.test.ts (15 tests) 63ms
+ ✓ __tests__/integration/copilot-chat.test.ts (8 tests) 101ms
+ ✓ __tests__/integration/recurring-expenses-id.test.ts (10 tests) 182ms
+ ✓ __tests__/integration/copilot-chat-deep.test.ts (25 tests) 341ms
+ ✓ __tests__/lib/api-auth.test.ts (12 tests) 43ms
+ ✓ __tests__/integration/billing-webhook-deep.test.ts (8 tests) 111ms
+ ✓ __tests__/integration/vendors-fingerprints-deep.test.ts (7 tests) 39ms
+ ✓ __tests__/integration/payroll.test.ts (11 tests) 24ms
+ ✓ __tests__/integration/expenses-ocr-deep.test.ts (7 tests) 17ms
+ ✓ __tests__/integration/reports-comparison.test.ts (2 tests) 121ms
+ ✓ __tests__/integration/vendors-deep.test.ts (14 tests) 23ms
+ ✓ __tests__/integration/plugin-dashboard.test.ts (3 tests) 81ms
+ ✓ __tests__/integration/v1-copilot-query.test.ts (16 tests) 179ms
+ ✓ __tests__/integration/forecast-deep.test.ts (8 tests) 257ms
+ ✓ __tests__/integration/revenue-deep.test.ts (11 tests) 232ms
+ ✓ __tests__/integration/onboarding-deep.test.ts (10 tests) 58ms
+ ✓ __tests__/lib/bank-import.test.ts (47 tests) 20ms
+ ✓ __tests__/integration/invoices-remind.test.ts (12 tests) 447ms
+ ✓ __tests__/integration/receipts-upload.test.ts (7 tests) 119ms
+ ✓ __tests__/lib/anomalies.test.ts (8 tests) 194ms
+ ✓ __tests__/integration/import-smart.test.ts (10 tests) 24ms
+ ✓ __tests__/integration/v1-plugin-dashboard.test.ts (3 tests) 105ms
+ ✓ __tests__/integration/v1-invoices.test.ts (10 tests) 20ms
+ ✓ __tests__/integration/invoice-email.test.ts (6 tests) 227ms
+ ✓ __tests__/integration/invoices-id-email.test.ts (7 tests) 171ms
+ ✓ __tests__/integration/clients-id.test.ts (11 tests) 207ms
+ ✓ __tests__/integration/client-detail.test.ts (9 tests) 116ms
+ ✓ __tests__/integration/webhooks-stripe.test.ts (7 tests) 57ms
+ ✓ __tests__/integration/reports-cfo-brief.test.ts (5 tests) 68ms
+ ✓ __tests__/integration/gmail-callback-deep.test.ts (6 tests) 18ms
+ ✓ __tests__/integration/recurring-expenses.test.ts (14 tests) 209ms
+ ✓ __tests__/integration/invoices-action-deep.test.ts (7 tests) 20ms
+ ✓ __tests__/integration/gst-cleartax-deep.test.ts (6 tests) 31ms
+ ✓ __tests__/lib/pdf.test.ts (8 tests) 422ms
+ ✓ __tests__/lib/auth.test.ts (16 tests) 135ms
+ ✓ __tests__/integration/accounting-chart.test.ts (8 tests) 209ms
+ ✓ __tests__/integration/founder-os-token.test.ts (5 tests) 120ms
+ ✓ __tests__/integration/reports-comparison-deep.test.ts (6 tests) 278ms
+ ✓ __tests__/integration/settings-organization.test.ts (9 tests) 86ms
+ ✓ __tests__/lib/currency.test.ts (35 tests) 167ms
+ ✓ __tests__/integration/bank-import-deep.test.ts (15 tests) 351ms
+ ✓ __tests__/integration/compliance-calendar.test.ts (4 tests) 247ms
+ ✓ __tests__/integration/integrations-gmail-sync.test.ts (2 tests) 134ms
+ ✓ __tests__/integration/users-deep.test.ts (17 tests) 164ms
+ ✓ __tests__/integration/invoices-payments-deep.test.ts (9 tests) 23ms
+ ✓ __tests__/integration/ap-inbox.test.ts (4 tests) 26ms
+ ✓ __tests__/integration/invoices.test.ts (9 tests) 98ms
+ ✓ __tests__/integration/revenue.test.ts (11 tests) 113ms
+ ✓ __tests__/integration/organizations-id.test.ts (4 tests) 41ms
+ ✓ __tests__/integration/expenses-approvals.test.ts (7 tests) 59ms
+ ✓ __tests__/integration/expenses-suggest-category.test.ts (2 tests) 15ms
+ ✓ __tests__/integration/v1-plugin-heartbeat.test.ts (5 tests) 17ms
+ ✓ __tests__/integration/ap-inbox-deep.test.ts (12 tests) 68ms
+ ✓ __tests__/integration/users.test.ts (2 tests) 39ms
+ ✓ __tests__/lib/roles.test.ts (37 tests) 12ms
+ ✓ __tests__/lib/tds.test.ts (42 tests) 105ms
+ ✓ __tests__/integration/billing-checkout-deep.test.ts (6 tests) 36ms
+ ✓ __tests__/integration/invoices-id-action.test.ts (2 tests) 11ms
+ ✓ __tests__/integration/transfer-deep.test.ts (13 tests) 23ms
+ ✓ __tests__/integration/clients.test.ts (8 tests) 137ms
+ ✓ __tests__/integration/plugin-heartbeat.test.ts (5 tests) 21ms
+ ✓ __tests__/integration/tds.test.ts (5 tests) 21ms
+ ✓ __tests__/lib/gst.test.ts (33 tests) 94ms
+ ✓ __tests__/integration/reconciliation-auto-deep.test.ts (8 tests) 15ms
+ ✓ __tests__/integration/reconciliation-auto.test.ts (12 tests) 68ms
+ ✓ __tests__/integration/suggestions-aliases.test.ts (8 tests) 76ms
+ ✓ __tests__/integration/expenses-breakdown.test.ts (2 tests) 14ms
+ ✓ __tests__/integration/audit.test.ts (4 tests) 52ms
+ ✓ __tests__/integration/recurring-expenses-deep.test.ts (15 tests) 81ms
+ ✓ __tests__/lib/payouts.test.ts (8 tests) 12ms
+ ✓ __tests__/integration/tds-form16a.test.ts (2 tests) 12ms
+ ✓ __tests__/integration/integrations-gmail-deep.test.ts (8 tests) 24ms
+ ✓ __tests__/integration/health.test.ts (2 tests) 39ms
+ ✓ __tests__/integration/metrics-saas.test.ts (5 tests) 36ms
+ ✓ __tests__/integration/budgets.test.ts (15 tests) 82ms
+ ✓ __tests__/integration/suggest-category-deep.test.ts (7 tests) 112ms
+ ✓ __tests__/integration/invoices-id-payments.test.ts (4 tests) 52ms
+ ✓ __tests__/integration/invoice-remind.test.ts (7 tests) 12ms
+ ✓ __tests__/integration/expenses-id.test.ts (4 tests) 89ms
+ ✓ __tests__/integration/receipts-id.test.ts (4 tests) 75ms
+ ✓ __tests__/integration/transfer.test.ts (2 tests) 113ms
+ ✓ __tests__/integration/invoices-id.test.ts (6 tests) 112ms
+ ✓ __tests__/integration/v1-copilot-action.test.ts (2 tests) 12ms
+ ✓ __tests__/integration/organizations-id-deep.test.ts (8 tests) 91ms
+ ✓ __tests__/integration/audit-route.test.ts (8 tests) 63ms
+ ✓ __tests__/integration/categories.test.ts (12 tests) 18ms
+ ✓ __tests__/integration/reports-pnl-csv.test.ts (2 tests) 12ms
+ ✓ __tests__/integration/tds-form16a-deep.test.ts (4 tests) 19ms
+ ✓ __tests__/integration/vendors.test.ts (7 tests) 25ms
+ ✓ __tests__/integration/expenses-confidence.test.ts (3 tests) 11ms
+ ✓ __tests__/integration/invoices-auto-match.test.ts (4 tests) 25ms
+ ✓ __tests__/integration/fx-rates.test.ts (5 tests) 18ms
+ ✓ __tests__/integration/plugin-manifest.test.ts (7 tests) 10ms
+ ✓ __tests__/lib/audit.test.ts (5 tests) 11ms
+ ✓ __tests__/integration/reports-pnl-csv-deep.test.ts (3 tests) 16ms
+ ✓ __tests__/integration/reports-tax.test.ts (2 tests) 26ms
+ ✓ __tests__/integration/expenses.test.ts (6 tests) 49ms
+ ✓ __tests__/integration/receipts.test.ts (4 tests) 62ms
+ ✓ __tests__/integration/expenses-receipt-deep.test.ts (6 tests) 20ms

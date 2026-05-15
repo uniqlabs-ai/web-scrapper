@@ -70,17 +70,17 @@ describe('POST /api/v1/invoices', () => {
   it('returns 404 when client not in org', async () => {
     (mp.client.findFirst as any).mockResolvedValue(null);
     const res = await POST(req('POST', {
-      dueDate: '2025-05-15', clientId: 'c-unknown',
+      dueDate: '2025-05-15', clientId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       lineItems: [{ description: 'X', quantity: 1, unitPrice: 1000 }],
     }));
     expect(res.status).toBe(404);
   });
 
   it('returns 500 when no admin user exists', async () => {
-    (mp.client.findFirst as any).mockResolvedValue({ id: 'c1' });
+    (mp.client.findFirst as any).mockResolvedValue({ id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22' });
     (mp.user.findFirst as any).mockResolvedValue(null);
     const res = await POST(req('POST', {
-      dueDate: '2025-05-15', clientId: 'c1',
+      dueDate: '2025-05-15', clientId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
       lineItems: [{ description: 'X', quantity: 1, unitPrice: 1000, gstRate: 18 }],
     }));
     expect(res.status).toBe(500);

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createHmac } from "crypto";
+import { verifyWebhookSignature } from "@/lib/webhooks";
+import { log, toLogError } from "@/lib/logger";
+import { InboundWebhookEventSchema } from "@/lib/schemas";
 
 interface InboundEvent {
   productId: string;
@@ -10,25 +12,39 @@ interface InboundEvent {
   timestamp: string;
 }
 
-function verifySignature(body: string, signature: string): boolean {
-  const secret = process.env.WEBHOOK_SECRET;
-  if (!secret) return true; // Accept all in dev mode
-  const expected = createHmac("sha256", secret).update(body).digest("hex");
-  return expected === signature;
-}
+
+
 
 async function processEvent(event: InboundEvent) {
   const { productId, event: eventType, data } = event;
+
+  // Resolve organizationId from the source user for tenant scoping
+  const sourceUserId = (data.userId as string) || "demo-user";
+  const sourceUser = await prisma.user.findUnique({
+    where: { id: sourceUserId },
+    select: { organizationId: true },
+  });
+  const organizationId = sourceUser?.organizationId || undefined;
 
   // Auto-create expenses from other modules
   if (eventType === "offer.accepted" && productId === "hiring") {
     const salary = (data.salary as number) || 0;
     const candidateName = (data.candidateName as string) || "New Hire";
-    const userId = (data.userId as string) || "demo-user";
+    const userId = sourceUserId;
+
+    // RELIABILITY: Idempotency guard — prevent duplicate expenses on webhook retry
+    const existingExpense = await prisma.expense.findFirst({
+      where: { sourceId: data.offerId as string, source: `${productId}.${eventType}` }
+    });
+    if (existingExpense) {
+      log.info("Duplicate hiring event skipped", { module: "webhooks", action: "inbound", meta: { offerId: data.offerId } });
+      return { action: "duplicate.skipped", existingId: existingExpense.id };
+    }
 
     await prisma.expense.create({
       data: {
         userId,
+        organizationId,
         description: `Hiring: ${candidateName} (annual salary)`,
         amount: salary,
         date: new Date(),
@@ -45,12 +61,21 @@ async function processEvent(event: InboundEvent) {
 
   if (eventType === "deal.closed" && productId === "uniqlabs") {
     const amount = (data.dealValue as number) || 0;
-    const clientName = (data.clientName as string) || "Client";
-    const userId = (data.userId as string) || "demo-user";
+    const _clientName = (data.clientName as string) || "Client";
+    const userId = sourceUserId;
+
+    // RELIABILITY: Idempotency guard
+    const existingRevenue = await prisma.revenue.findFirst({
+      where: { sourceId: data.dealId as string, source: `${productId}.${eventType}` }
+    });
+    if (existingRevenue) {
+      return { action: "duplicate.skipped", existingId: existingRevenue.id };
+    }
 
     await prisma.revenue.create({
       data: {
         userId,
+        organizationId,
         month: new Date(),
         amount,
         type: (data.recurring as boolean) ? "recurring" : "one-time",
@@ -65,11 +90,20 @@ async function processEvent(event: InboundEvent) {
   if (eventType === "campaign.launched" && productId === "gtm") {
     const budget = (data.budget as number) || 0;
     const campaignName = (data.campaignName as string) || "Marketing Campaign";
-    const userId = (data.userId as string) || "demo-user";
+    const userId = sourceUserId;
+
+    // RELIABILITY: Idempotency guard
+    const existingExpense = await prisma.expense.findFirst({
+      where: { sourceId: data.campaignId as string, source: `${productId}.${eventType}` }
+    });
+    if (existingExpense) {
+      return { action: "duplicate.skipped", existingId: existingExpense.id };
+    }
 
     await prisma.expense.create({
       data: {
         userId,
+        organizationId,
         description: `Campaign: ${campaignName}`,
         amount: budget,
         date: new Date(),
@@ -85,11 +119,20 @@ async function processEvent(event: InboundEvent) {
 
   if (eventType === "subscription.renewed") {
     const amount = (data.amount as number) || 0;
-    const userId = (data.userId as string) || "demo-user";
+    const userId = sourceUserId;
+
+    // RELIABILITY: Idempotency guard
+    const existingRevenue = await prisma.revenue.findFirst({
+      where: { sourceId: data.subscriptionId as string, source: `${productId}.${eventType}` }
+    });
+    if (existingRevenue) {
+      return { action: "duplicate.skipped", existingId: existingRevenue.id };
+    }
 
     await prisma.revenue.create({
       data: {
         userId,
+        organizationId,
         month: new Date(),
         amount,
         type: "recurring",
@@ -108,20 +151,25 @@ export async function POST(request: NextRequest) {
   try {
     const bodyText = await request.text();
 
-    // Verify HMAC signature
+    // Verify HMAC signature (timing-safe, fail-closed)
     const signature = request.headers.get("x-webhook-signature") || "";
-    if (!verifySignature(bodyText, signature)) {
+    if (!verifyWebhookSignature(bodyText, signature)) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    const event: InboundEvent = JSON.parse(bodyText);
-
-    if (!event.productId || !event.event) {
-      return NextResponse.json(
-        { error: "productId and event are required" },
-        { status: 400 }
-      );
+    let rawEvent;
+    try {
+      rawEvent = JSON.parse(bodyText);
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
     }
+
+    const parsed = InboundWebhookEventSchema.safeParse(rawEvent);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: parsed.error.issues }, { status: 400 });
+    }
+
+    const event: InboundEvent = parsed.data;
 
     const result = await processEvent(event);
 
@@ -131,7 +179,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Inbound webhook error:", error);
+    log.error("Inbound webhook error", { module: "webhooks", action: "inbound", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to process webhook" },
       { status: 500 }

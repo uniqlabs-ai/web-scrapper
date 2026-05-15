@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkPermission, logActivity } from "@/lib/rbac";
+import { log, toLogError } from "@/lib/logger";
+import { UpdateUserSchema } from "@/lib/schemas";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET() {
   try {
@@ -10,6 +13,7 @@ export async function GET() {
     }
 
     const users = await prisma.user.findMany({
+      take: 500,
       select: {
         id: true,
         email: true,
@@ -30,19 +34,36 @@ export async function GET() {
 
     return NextResponse.json({ users });
   } catch (error) {
-    console.error("List users error:", error);
+    log.error("List users error", { module: "users", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to list users" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = rateLimit(request, { windowSec: 60, max: 5, prefix: "users" });
+    if (limited) return limited;
     const check = await checkPermission("manage_users");
     if (!check.allowed) {
       return NextResponse.json({ error: check.error }, { status: check.status });
     }
 
-    const body = await request.json();
+    const rawBody = await request.json();
+
+
+    const parsed = UpdateUserSchema.safeParse(rawBody);
+
+
+    if (!parsed.success) {
+
+
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
+
+
+    }
+
+
+    const body = parsed.data;
     const { email, fullName, role } = body;
 
     if (!email) {
@@ -79,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ user }, { status: 201 });
   } catch (error) {
-    console.error("Create user error:", error);
+    log.error("Create user error", { module: "users", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
   }
 }

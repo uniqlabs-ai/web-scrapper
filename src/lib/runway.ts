@@ -1,9 +1,9 @@
 import { prisma } from "./prisma";
 import type { RunwayData, BurnRateData, RevenueData } from "./types";
 
-export async function getRunway(userId: string): Promise<RunwayData> {
+export async function getRunway(userId: string, organizationId: string): Promise<RunwayData> {
   const bankAccounts = await prisma.bankAccount.findMany({
-    where: { userId, isActive: true },
+    where: { userId, organizationId, isActive: true },
     take: 100, // RELIABILITY: Safety ceiling
   });
   const cashInBank = bankAccounts.reduce(
@@ -11,7 +11,7 @@ export async function getRunway(userId: string): Promise<RunwayData> {
     0
   );
 
-  const monthlyBurn = await getMonthlyBurn(userId);
+  const monthlyBurn = await getMonthlyBurn(userId, organizationId);
   const runwayMonths =
     monthlyBurn > 0 ? Math.round((cashInBank / monthlyBurn) * 10) / 10 : Infinity;
 
@@ -25,7 +25,7 @@ export async function getRunway(userId: string): Promise<RunwayData> {
   return { cashInBank, monthlyBurn, runwayMonths, projectedRunOutDate };
 }
 
-export async function getBurnRate(userId: string): Promise<BurnRateData> {
+export async function getBurnRate(userId: string, organizationId: string): Promise<BurnRateData> {
   const now = new Date();
 
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -34,18 +34,19 @@ export async function getBurnRate(userId: string): Promise<BurnRateData> {
 
   const [currentExpenses, prevExpenses, threeMonthExpenses] = await Promise.all([
     prisma.expense.aggregate({
-      where: { userId, date: { gte: currentMonthStart } },
+      where: { userId, organizationId, date: { gte: currentMonthStart } },
       _sum: { amount: true },
     }),
     prisma.expense.aggregate({
       where: {
         userId,
+        organizationId,
         date: { gte: prevMonthStart, lt: currentMonthStart },
       },
       _sum: { amount: true },
     }),
     prisma.expense.aggregate({
-      where: { userId, date: { gte: threeMonthsAgo } },
+      where: { userId, organizationId, date: { gte: threeMonthsAgo } },
       _sum: { amount: true },
     }),
   ]);
@@ -64,14 +65,14 @@ export async function getBurnRate(userId: string): Promise<BurnRateData> {
   return { currentMonth, previousMonth, average3Month, trend };
 }
 
-export async function getRevenueData(userId: string): Promise<RevenueData> {
+export async function getRevenueData(userId: string, organizationId: string): Promise<RevenueData> {
   const now = new Date();
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
   const revenues = await prisma.revenue.findMany({
-    where: { userId, month: { gte: sixMonthsAgo } },
+    where: { userId, organizationId, month: { gte: sixMonthsAgo } },
     orderBy: { month: "asc" },
     take: 5000, // RELIABILITY: Safety ceiling
   });
@@ -118,12 +119,12 @@ export async function getRevenueData(userId: string): Promise<RevenueData> {
   return { currentMRR, currentARR, previousMRR, growth, history: aggregatedHistory, totalMonthlyRevenue };
 }
 
-async function getMonthlyBurn(userId: string): Promise<number> {
+async function getMonthlyBurn(userId: string, organizationId: string): Promise<number> {
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
   const expenses = await prisma.expense.aggregate({
-    where: { userId, date: { gte: threeMonthsAgo } },
+    where: { userId, organizationId, date: { gte: threeMonthsAgo } },
     _sum: { amount: true },
   });
 

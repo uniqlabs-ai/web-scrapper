@@ -118,6 +118,55 @@ describe('GET /api/reconciliation', () => {
     expect(data.summary.withSuggestions).toBe(1);
   });
 
+  it('matches with medium confidence (0.8) for expenses', async () => {
+    const txnDate = new Date(now);
+    const expDate = new Date(now.getTime() + 2 * 86400000); // 2 days later
+    mp.bankTransaction.findMany.mockResolvedValue([
+      { id: 'bt3', amount: 5000, date: txnDate, type: 'debit', description: 'Test', isReconciled: false },
+    ] as any);
+    mp.expense.findMany.mockResolvedValue([
+      { id: 'e2', amount: 5000, date: expDate, description: 'Test Exp', category: null },
+    ] as any);
+    mp.invoice.findMany.mockResolvedValue([]);
+
+    const res = await GET();
+    const data = await res.json();
+    expect(data.unmatched[0].bestMatch.confidence).toBe(0.8);
+  });
+
+  it('matches with medium confidence (0.75) for invoices with fallback client name and issueDate', async () => {
+    const txnDate = new Date(now);
+    const invDate = new Date(now.getTime() + 2 * 86400000); // 2 days later
+    mp.bankTransaction.findMany.mockResolvedValue([
+      { id: 'bt4', amount: 5000, date: txnDate, type: 'credit', description: 'Test', isReconciled: false },
+    ] as any);
+    mp.expense.findMany.mockResolvedValue([]);
+    mp.invoice.findMany.mockResolvedValue([
+      { id: 'inv2', total: 5000, invoiceNumber: 'INV-002', issueDate: invDate, status: 'paid' }, // no paidAt, no client
+    ] as any);
+
+    const res = await GET();
+    const data = await res.json();
+    expect(data.unmatched[0].bestMatch.confidence).toBe(0.75);
+    expect(data.unmatched[0].bestMatch.description).toBe('INV-002 — Unknown');
+  });
+
+  it('ignores invoice if amount or date difference is too large', async () => {
+    const txnDate = new Date(now);
+    const invDate = new Date(now.getTime() + 6 * 86400000); // 6 days later
+    mp.bankTransaction.findMany.mockResolvedValue([
+      { id: 'bt5', amount: 5000, date: txnDate, type: 'credit', description: 'Test', isReconciled: false },
+    ] as any);
+    mp.expense.findMany.mockResolvedValue([]);
+    mp.invoice.findMany.mockResolvedValue([
+      { id: 'inv3', total: 5000, invoiceNumber: 'INV-003', paidAt: invDate, status: 'paid' },
+    ] as any);
+
+    const res = await GET();
+    const data = await res.json();
+    expect(data.unmatched[0].suggestions).toHaveLength(0);
+  });
+
   it('returns 500 on error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET();
@@ -148,6 +197,19 @@ describe('POST /api/reconciliation', () => {
       invoice: { update: vi.fn() },
     }));
     const res = await POST(req({ transactionId: 'bt1', matchType: 'revenue', matchId: 'r1', category: 'Sales' }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.matched.matchType).toBe('revenue');
+  });
+
+  it('matches transaction to revenue without category', async () => {
+    mp.$transaction.mockImplementation(async (cb: any) => cb({
+      bankTransaction: { update: vi.fn() },
+      expense: { update: vi.fn() },
+      revenue: { update: vi.fn() },
+      invoice: { update: vi.fn() },
+    }));
+    const res = await POST(req({ transactionId: 'bt1', matchType: 'revenue', matchId: 'r1' }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.matched.matchType).toBe('revenue');

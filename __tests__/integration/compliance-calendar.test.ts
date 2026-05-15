@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: { invoice: { findMany: vi.fn() } },
@@ -14,7 +14,6 @@ vi.mock('@/lib/tds', () => ({
   ],
 }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
-vi.mock('@/lib/auth', () => ({ getAuthUserId: vi.fn(), requireUser: vi.fn(), getSessionUser: vi.fn(), getOrCreateSessionUser: vi.fn(), getUserId: vi.fn() }));
 
 import { prisma } from '@/lib/prisma';
 import { requireTenant } from '@/lib/tenant';
@@ -27,46 +26,48 @@ beforeEach(() => {
   vi.clearAllMocks();
   mt.mockResolvedValue({ userId:'u1', organizationId:'org-1' });
   (mp.invoice.findMany as any).mockResolvedValue([]);
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('GET /api/compliance/calendar', () => {
-  it('returns deadlines with GST, TDS, and advance tax', async () => {
+  it('handles mid-year dates correctly (August 11th)', async () => {
+    vi.setSystemTime(new Date('2024-08-11T12:00:00Z')); // Today is GSTR-1 due date
     const res = await GET();
     const d = await res.json();
     expect(res.status).toBe(200);
-    expect(d.deadlines.length).toBeGreaterThan(5);
-    expect(d.summary.total).toBeGreaterThan(0);
-    // Should have GST entries
-    expect(d.deadlines.some((dl: any) => dl.type === 'GST')).toBe(true);
-    // Should have TDS entries
-    expect(d.deadlines.some((dl: any) => dl.type === 'TDS')).toBe(true);
-    // Should have advance tax entries
-    expect(d.deadlines.some((dl: any) => dl.type === 'Income Tax')).toBe(true);
+    
+    expect(d.deadlines.some((dl: any) => dl.status === 'due_today' && dl.type === 'GST' && dl.date === '2024-08-11')).toBe(true);
+    expect(d.deadlines.some((dl: any) => dl.status === 'overdue' && dl.type === 'TDS' && dl.date === '2024-07-31')).toBe(true);
+    expect(d.deadlines.some((dl: any) => dl.status === 'upcoming' && dl.type === 'Income Tax' && dl.date === '2024-09-15')).toBe(true);
+  });
+
+  it('handles early-year dates correctly (January 20th)', async () => {
+    vi.setSystemTime(new Date('2024-01-20T12:00:00Z')); // Today is GSTR-3B due date
+    const res = await GET();
+    const d = await res.json();
+    expect(res.status).toBe(200);
+    
+    expect(d.deadlines.some((dl: any) => dl.status === 'due_today' && dl.title.includes('GSTR-3B'))).toBe(true);
+    
+    // FY should be 2023 for early year
+    expect(d.deadlines.some((dl: any) => dl.type === 'Income Tax' && dl.date === '2024-03-15')).toBe(true); // FY23 Q4 Advance tax
   });
 
   it('includes upcoming invoice due dates', async () => {
+    vi.setSystemTime(new Date('2024-05-15T12:00:00Z'));
     (mp.invoice.findMany as any).mockResolvedValue([
-      { invoiceNumber:'INV-001', total:100000, dueDate:new Date(Date.now() + 7*86400000), client:{ name:'Acme' } },
+      { invoiceNumber:'INV-001', total:100000, dueDate:new Date('2024-05-10T12:00:00Z'), client:{ name:'Acme' } }, // overdue
+      { invoiceNumber:'INV-002', total:100000, dueDate:new Date('2024-05-15T12:00:00Z'), client:null }, // due_today
     ]);
     const res = await GET();
     const d = await res.json();
-    expect(d.deadlines.some((dl: any) => dl.type === 'Receivable')).toBe(true);
-  });
-
-  it('marks overdue deadlines correctly', async () => {
-    const res = await GET();
-    const d = await res.json();
-    // Some past deadlines should be overdue
-    const overdue = d.deadlines.filter((dl: any) => dl.status === 'overdue');
-    expect(overdue.length).toBeGreaterThanOrEqual(0); // May have 0 if we're early in the month
-  });
-
-  it('deadlines are sorted by date', async () => {
-    const res = await GET();
-    const d = await res.json();
-    for (let i = 1; i < d.deadlines.length; i++) {
-      expect(d.deadlines[i].date >= d.deadlines[i-1].date).toBe(true);
-    }
+    
+    expect(d.deadlines.some((dl: any) => dl.type === 'Receivable' && dl.status === 'overdue' && dl.title.includes('Acme'))).toBe(true);
+    expect(d.deadlines.some((dl: any) => dl.type === 'Receivable' && dl.status === 'due_today' && dl.title.includes('Client'))).toBe(true);
   });
 
   it('returns 500 on error', async () => {

@@ -31,14 +31,48 @@ function req(method='GET', body?:unknown, url='http://localhost:3008/api/activit
 describe('GET /api/activity', () => {
   it('handles GET successfully', async () => {
     const res = await GET(req());
-    expect(res.status).toBeLessThan(600);
+    expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toBeDefined();
+    expect(data.activities).toBeDefined();
+  });
+
+  it('filters by resource param', async () => {
+    const res = await GET(req('GET', undefined, 'http://localhost:3008/api/activity?resource=invoice'));
+    expect(res.status).toBe(200);
+    expect(mp.activityLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ resource: 'invoice' })
+    }));
+  });
+
+  it('filters by action param', async () => {
+    const res = await GET(req('GET', undefined, 'http://localhost:3008/api/activity?action=create'));
+    expect(res.status).toBe(200);
+    expect(mp.activityLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ action: 'create' })
+    }));
+  });
+
+  it('filters by both resource and action params', async () => {
+    const res = await GET(req('GET', undefined, 'http://localhost:3008/api/activity?resource=expense&action=delete'));
+    expect(res.status).toBe(200);
+    expect(mp.activityLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ resource: 'expense', action: 'delete' })
+    }));
+  });
+
+  it('caps limit at 100', async () => {
+    const res = await GET(req('GET', undefined, 'http://localhost:3008/api/activity?limit=200'));
+    expect(res.status).toBe(200);
+  });
+
+  it('uses default limit when param is NaN', async () => {
+    const res = await GET(req('GET', undefined, 'http://localhost:3008/api/activity?limit=abc'));
+    expect(res.status).toBe(200);
   });
 
   it('handles tenant error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(req());
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBe(500);
   });
 });

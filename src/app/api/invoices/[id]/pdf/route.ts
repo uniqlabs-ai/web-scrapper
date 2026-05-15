@@ -1,18 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
 import { generateInvoicePDF } from "@/lib/pdf";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const InvoicePdfParamSchema = z.object({
+  id: z.string().min(1, "Invoice ID is required"),
+});
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId();
-    const { id } = await params;
+    const { userId, organizationId } = await requireTenant();
+    const rawParams = await params;
+    const paramsParsed = InvoicePdfParamSchema.safeParse(rawParams);
+    if (!paramsParsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: paramsParsed.error.issues }, { status: 400 });
+    }
+    const { id } = paramsParsed.data;
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id, userId },
+      where: { id, userId, organizationId },
       include: {
         client: true,
         lineItems: true,
@@ -22,6 +33,16 @@ export async function GET(
 
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    let paymentUpiId: string | undefined = undefined;
+    if (invoice.organization?.alertSettings) {
+      try {
+        const settings = JSON.parse(invoice.organization.alertSettings);
+        if (settings.paymentUpiId) paymentUpiId = settings.paymentUpiId;
+      } catch (e: unknown) {
+        log.warn("Malformed alertSettings JSON", { module: "invoices", action: "pdf", meta: { error: e instanceof Error ? e.message : String(e) } });
+      }
     }
 
     const pdfBuffer = generateInvoicePDF({
@@ -54,6 +75,7 @@ export async function GET(
       isInterState: invoice.isInterState ?? false,
       currency: invoice.currency,
       notes: invoice.notes || undefined,
+      paymentUpiId,
     });
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
@@ -65,7 +87,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("PDF generation error:", error);
+    log.error("PDF generation error", { module: "invoices", action: "pdf", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to generate PDF" },
       { status: 500 }

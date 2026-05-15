@@ -3,43 +3,125 @@ import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    receipt: { create: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"processed","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"fileName":"bill.png","mimeType":"image/png","confidence":0.9}), update: vi.fn().mockResolvedValue({"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"processed","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"fileName":"bill.png","mimeType":"image/png","confidence":0.9}) }
+    receipt: { create: vi.fn(), update: vi.fn() }
   },
 }));
+
+vi.mock('@/lib/document-intelligence', () => ({ parseReceiptWithAI: vi.fn() }));
 vi.mock('@/lib/tenant', () => ({ requireTenant: vi.fn(), TenantError: class extends Error { constructor(m:string){super(m);this.name='TenantError'} } }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
-vi.mock('jspdf', () => ({ default: class { text() {} save() {} setFontSize() {} setFont() {} line() {} internal = { getNumberOfPages: () => 1, pageSize: { getWidth: () => 210, getHeight: () => 297 } }; addPage() {} output() { return 'mock-pdf'; } } }));
 
 import { prisma } from '@/lib/prisma';
 import { requireTenant } from '@/lib/tenant';
+import { parseReceiptWithAI } from '@/lib/document-intelligence';
 import { POST } from '@/app/api/receipts/upload/route';
-
 import { mockPrisma } from '../helpers/prisma-mock';
-const mp = mockPrisma(prisma);
+
 const mt = vi.mocked(requireTenant);
+const mp = mockPrisma(prisma);
+const mparse = vi.mocked(parseReceiptWithAI);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mt.mockResolvedValue({ userId: 'u1', organizationId: 'org-1' });
 });
 
-function req(method='GET', body?:unknown, url='http://localhost:3008/api/receipts/upload'): NextRequest {
-  const init: Record<string,unknown> = { method };
-  if (body) { init.body=JSON.stringify(body); init.headers={'Content-Type':'application/json'}; }
-  return new NextRequest(new URL(url), init);
-}
-
 describe('POST /api/receipts/upload', () => {
-  it('handles POST successfully', async () => {
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeLessThan(600);
-    const data = await res.json();
-    expect(data).toBeDefined();
+  function makeReq(file?: File): NextRequest {
+    const formData = new FormData();
+    if (file) formData.append('file', file);
+    return new NextRequest(new URL('http://localhost:3008/api/receipts/upload'), {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  it('returns 400 if no file uploaded', async () => {
+    const res = await POST(makeReq());
+    expect(res.status).toBe(400);
   });
 
-  it('handles tenant error', async () => {
+  it('returns 400 if file exceeds 5MB', async () => {
+    const bigBuffer = new ArrayBuffer(6 * 1024 * 1024);
+    const file = new File([bigBuffer], 'big.jpg', { type: 'image/jpeg' });
+    const res = await POST(makeReq(file));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('Validation failed');
+  });
+
+  it('returns 400 for unsupported file types', async () => {
+    const file = new File(['text'], 'test.txt', { type: 'text/plain' });
+    const res = await POST(makeReq(file));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain('Unsupported file type');
+  });
+
+  it('returns 500 if AI parsing fails (returns null)', async () => {
+    const file = new File(['image'], 'test.jpg', { type: 'image/jpeg' });
+    mp.receipt.create.mockResolvedValue({ id: 'r1' } as any);
+    mparse.mockResolvedValue(null);
+    mp.receipt.update.mockResolvedValue({} as any);
+
+    const res = await POST(makeReq(file));
+    expect(res.status).toBe(500);
+    expect(mp.receipt.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'r1' },
+      data: { status: 'failed' }
+    }));
+  });
+
+  it('processes valid image receipt successfully', async () => {
+    const file = new File(['image'], 'test.png', { type: 'image/png' });
+    mp.receipt.create.mockResolvedValue({ id: 'r1' } as any);
+    mparse.mockResolvedValue({
+      vendorName: 'Acme',
+      amount: 100,
+      gstNumber: 'GST123',
+      category: 'Software',
+      date: '2024-01-01',
+      confidence: 0.95
+    } as any);
+    mp.receipt.update.mockResolvedValue({} as any);
+
+    const res = await POST(makeReq(file));
+    expect(res.status).toBe(200);
+    expect(mp.receipt.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'processed',
+        extractedVendor: 'Acme',
+        extractedAmount: 100
+      })
+    }));
+  });
+
+  it('processes valid PDF receipt successfully (fallbacks)', async () => {
+    const file = new File(['pdf'], 'test.pdf', { type: 'application/pdf' });
+    mp.receipt.create.mockResolvedValue({ id: 'r1' } as any);
+    mparse.mockResolvedValue({
+      vendorName: null,
+      amount: null,
+      gstNumber: null,
+      category: null,
+      date: null
+    } as any); // Test fallbacks to null
+
+    const res = await POST(makeReq(file));
+    expect(res.status).toBe(200);
+    expect(mp.receipt.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        extractedVendor: null,
+        extractedAmount: null,
+        confidence: 0.85 // default fallback
+      })
+    }));
+  });
+
+  it('returns 500 on unexpected exceptions', async () => {
     mt.mockRejectedValue(new Error('fail'));
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    const file = new File(['image'], 'test.jpg', { type: 'image/jpeg' });
+    const res = await POST(makeReq(file));
+    expect(res.status).toBe(500);
   });
 });

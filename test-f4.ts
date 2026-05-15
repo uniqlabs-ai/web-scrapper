@@ -10,9 +10,12 @@ async function main() {
   }
   const userId = user.id;
 
-  const runway = await getRunway(userId);
-  const burnRate = await getBurnRate(userId);
-  const revenue = await getRevenueData(userId);
+  const org = await prisma.organization.findFirst({ where: { users: { some: { id: userId } } } });
+  const organizationId = org?.id || "";
+
+  const runway = await getRunway(userId, organizationId);
+  const burnRate = await getBurnRate(userId, organizationId);
+  const revenue = await getRevenueData(userId, organizationId);
 
   console.log("--- Dashboard KPIs ---");
   console.log("Runway:", runway);
@@ -23,8 +26,6 @@ async function main() {
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
   const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  const org = await prisma.organization.findFirst({ where: { users: { some: { id: userId } } } });
-  const organizationId = org?.id || "";
 
   const pnl = await generatePnL(userId, organizationId, from, to);
   console.log("\n--- P&L ---");

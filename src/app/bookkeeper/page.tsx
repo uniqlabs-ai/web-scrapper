@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Bot, Send, User, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
-  action?: string;
+  action?: { type: string; label: string; url?: string };
   timestamp: Date;
 }
 
@@ -14,7 +15,7 @@ export default function BookkeeperPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "👋 Hi! I'm your AI Bookkeeper. I can help you:\n\n• **Log expenses** — \"Log ₹5000 for AWS\"\n• **Query spending** — \"How much did I spend on rent?\"\n• **Check revenue** — \"Revenue this month\"\n• **Create invoices** — \"Create invoice for ₹50000 to Acme\"\n• **Get summaries** — \"Summary\"\n\nWhat would you like to do?",
+      content: "Hi! I'm your AI Bookkeeper. I can help you:\n\n• **Log expenses** — \"Log ₹5000 for AWS\"\n• **Query spending** — \"How much did I spend on rent?\"\n• **Check revenue** — \"Revenue this month\"\n• **Create invoices** — \"Create invoice for ₹50000 to Acme\"\n• **Get summaries** — \"Summary\"\n\nWhat would you like to do?",
       timestamp: new Date(),
     },
   ]);
@@ -34,10 +35,10 @@ export default function BookkeeperPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/bookkeeper", {
+      const res = await fetch("/api/copilot/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: userMsg.content }),
+        body: JSON.stringify({ message: userMsg.content }),
       });
       const data = await res.json();
       setMessages((prev) => [...prev, {
@@ -49,7 +50,7 @@ export default function BookkeeperPage() {
     } catch {
       setMessages((prev) => [...prev, {
         role: "assistant",
-        content: "❌ Failed to process. Please try again.",
+        content: "Failed to process. Please try again.",
         timestamp: new Date(),
       }]);
     } finally {
@@ -58,18 +59,13 @@ export default function BookkeeperPage() {
   }
 
   const ACTION_COLORS: Record<string, string> = {
-    expense_created: "#22C55E",
-    invoice_created: "#6366F1",
-    query: "#F59E0B",
-    summary: "#818CF8",
     help: "#64748B",
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 80px)" }}>
-      <div className="page-header" style={{ flexShrink: 0 }}>
-        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}><Bot size={24} /> AI Bookkeeper</h2>
-        <p>Natural language commands for your finances</p>
+      <div style={{ flexShrink: 0 }}>
+        <PageHeader title="AI Bookkeeper" description="Natural language commands for your finances" />
       </div>
 
       {/* Messages */}
@@ -104,13 +100,12 @@ export default function BookkeeperPage() {
               />
               {msg.action && (
                 <div style={{ marginTop: 8 }}>
-                  <span style={{
-                    padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700,
-                    background: `${ACTION_COLORS[msg.action] || "#666"}22`,
-                    color: ACTION_COLORS[msg.action] || "#666",
+                  <button onClick={() => { if (msg.action?.url) window.location.href = msg.action.url; }} style={{
+                    padding: "4px 12px", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(99,102,241,0.2)",
+                    background: "rgba(99,102,241,0.05)", color: "#818CF8"
                   }}>
-                    {msg.action.replace("_", " ").toUpperCase()}
-                  </span>
+                    {msg.action.label || msg.action.type?.replace("_", " ").toUpperCase() || "ACTION"}
+                  </button>
                 </div>
               )}
               <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 4 }}>

@@ -32,11 +32,27 @@ function req(method='GET', body?:unknown, url='http://localhost:3008/api/recurri
 }
 
 describe('GET /api/recurring-expenses', () => {
-  it('handles GET successfully', async () => {
+  it('handles GET successfully with valid aliases', async () => {
+    (mp.recurringExpense.findMany as any).mockResolvedValue([{
+      id: 'r1', description: 'Primary', amount: 100, nextDueDate: new Date(), aliases: '["Secondary"]', isActive: true
+    }, {
+      id: 'r2', description: 'Secondary', amount: 100, nextDueDate: new Date(), aliases: '[]', isActive: true
+    }]);
     const res = await GET(req());
     expect(res.status).toBeLessThan(600);
     const data = await res.json();
-    expect(data).toBeDefined();
+    expect(data.recurringExpenses.length).toBe(1);
+    expect(data.recurringExpenses[0].description).toBe('Primary');
+  });
+
+  it('handles GET successfully with malformed aliases JSON', async () => {
+    (mp.recurringExpense.findMany as any).mockResolvedValue([{
+      id: 'r1', description: 'Primary', amount: 100, nextDueDate: new Date(), aliases: '{ invalid }', isActive: true
+    }]);
+    const res = await GET(req());
+    expect(res.status).toBeLessThan(600);
+    const data = await res.json();
+    expect(data.recurringExpenses.length).toBe(1);
   });
 
   it('handles tenant error', async () => {
@@ -48,10 +64,23 @@ describe('GET /api/recurring-expenses', () => {
 
 describe('POST /api/recurring-expenses', () => {
   it('handles POST successfully', async () => {
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
+    const res = await POST(req('POST', { description: 'Test', amount: 100 }));
     expect(res.status).toBeLessThan(600);
-    const data = await res.json();
-    expect(data).toBeDefined();
+  });
+
+  it('handles POST successfully and fast-forwards weekly', async () => {
+    const res = await POST(req('POST', { description: 'Test', amount: 100, frequency: 'weekly', startDate: '2024-01-01' }));
+    expect(res.status).toBeLessThan(600);
+  });
+
+  it('handles POST successfully and fast-forwards quarterly', async () => {
+    const res = await POST(req('POST', { description: 'Test', amount: 100, frequency: 'quarterly', startDate: '2024-01-01' }));
+    expect(res.status).toBeLessThan(600);
+  });
+
+  it('handles POST successfully and fast-forwards yearly', async () => {
+    const res = await POST(req('POST', { description: 'Test', amount: 100, frequency: 'yearly', startDate: '2024-01-01' }));
+    expect(res.status).toBeLessThan(600);
   });
 
   it('handles tenant error', async () => {

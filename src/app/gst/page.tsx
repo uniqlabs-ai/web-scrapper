@@ -5,6 +5,7 @@ import { clientLog } from "@/lib/client-logger";
 import { useState, useEffect } from "react";
 import { FileText, Calendar, ArrowDown, ArrowUp, Minus, Search, Download } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface GSTR3BData {
   type: string;
@@ -109,8 +110,8 @@ export default function GSTReturnsPage() {
         fetch(`/api/gst/returns?type=gstr3b&month=${month}`).then((r) => r.json()),
         fetch(`/api/gst/returns?type=gstr1&month=${month}`).then((r) => r.json()),
       ]);
-      setData3b(r3b);
-      setData1(r1);
+      if (r3b && !r3b.error) setData3b(r3b);
+      if (r1 && !r1.error) setData1(r1);
     } catch (err) {
       clientLog.error("Failed to generate e-invoice", "gst", "e-invoice", err);
     } finally {
@@ -197,7 +198,7 @@ export default function GSTReturnsPage() {
                 <tr>
                   <td style={{ fontWeight: 600 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <ArrowUp size={14} color="#EF4444" /> Outward Supplies ({data3b?.outwardSupplies.invoiceCount} invoices)
+                      <ArrowUp size={14} color="#EF4444" /> Outward Supplies ({data3b?.outwardSupplies?.invoiceCount ?? 0} invoices)
                     </span>
                   </td>
                   <td style={{ textAlign: "right" }}>{fmt(data3b?.outwardSupplies.cgst || 0)}</td>
@@ -208,7 +209,7 @@ export default function GSTReturnsPage() {
                 <tr>
                   <td style={{ fontWeight: 600 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <ArrowDown size={14} color="#22C55E" /> Input Tax Credit ({data3b?.inputTaxCredit.expenseCount} expenses)
+                      <ArrowDown size={14} color="#22C55E" /> Input Tax Credit ({data3b?.inputTaxCredit?.expenseCount ?? 0} expenses)
                     </span>
                   </td>
                   <td style={{ textAlign: "right", color: "var(--accent-green)" }}>- {fmt(data3b?.inputTaxCredit.cgst || 0)}</td>
@@ -377,7 +378,16 @@ export default function GSTReturnsPage() {
           )}
         </div>
       ) : (
-        <div style={{ textAlign: "center", padding: 60, color: "var(--text-secondary)" }}>No data for this period</div>
+        <EmptyState
+          icon={FileText}
+          title="No GST data for this period"
+          description="Create invoices or record expenses with GST to generate return data for this filing period."
+          action={
+            <a href="/invoices?new=1" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+              Create Invoice
+            </a>
+          }
+        />
       )}
     </div>
   );

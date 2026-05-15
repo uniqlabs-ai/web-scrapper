@@ -1,21 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRunway, getBurnRate, getRevenueData } from "@/lib/runway";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
 
 export async function GET() {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
 
     const [runway, burnRate, revenue] = await Promise.all([
-      getRunway(userId),
-      getBurnRate(userId),
-      getRevenueData(userId),
+      getRunway(userId, organizationId),
+      getBurnRate(userId, organizationId),
+      getRevenueData(userId, organizationId),
     ]);
 
     const outstandingInvoices = await prisma.invoice.findMany({
+      take: 50,
       where: {
-        userId,
+        organizationId,
         status: { in: ["sent", "overdue"] },
       },
     });
@@ -31,12 +33,13 @@ export async function GET() {
       1
     );
     const thisMonthExpenses = await prisma.expense.aggregate({
-      where: { userId, date: { gte: thisMonthStart } },
+      where: { organizationId, date: { gte: thisMonthStart } },
       _sum: { amount: true },
     });
 
     return NextResponse.json({
-      monthlyRevenue: revenue.currentMRR,
+      monthlyRevenue: revenue.totalMonthlyRevenue,
+      totalMonthlyRevenue: revenue.totalMonthlyRevenue,
       burnRate: burnRate.currentMonth,
       runwayMonths: runway.runwayMonths,
       outstandingInvoices: {
@@ -50,7 +53,7 @@ export async function GET() {
       revenueDetails: revenue,
     });
   } catch (error) {
-    console.error("Dashboard error:", error);
+    log.error("Dashboard error", { module: "dashboard", action: "handler", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to load dashboard" },
       { status: 500 }

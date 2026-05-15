@@ -30,6 +30,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { StaggerContainer, SlideUp } from "@/components/animations";
 
 type Tab = "pnl" | "cashflow" | "tax" | "aging" | "comparison";
 

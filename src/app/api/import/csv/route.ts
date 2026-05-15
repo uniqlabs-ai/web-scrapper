@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
+import { requireTenant, TenantError } from "@/lib/tenant";
 import { parseCSV } from "@/lib/bank-import";
+import { rateLimit } from "@/lib/rate-limit";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
 import {
   ImportTarget,
   autoDetectMapping,
@@ -19,7 +23,9 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const limited = rateLimit(request, { windowSec: 60, max: 10, prefix: "import-csv" });
+    if (limited) return limited;
+    const { userId, organizationId } = await requireTenant();
     const formData = await request.formData();
 
     const file = formData.get("file") as File | null;
@@ -30,11 +36,14 @@ export async function POST(request: NextRequest) {
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
-    if (!target || !["expenses", "revenue", "invoices"].includes(target)) {
-      return NextResponse.json(
-        { error: "Invalid target. Must be: expenses, revenue, or invoices" },
-        { status: 400 }
-      );
+    const CsvImportParamsSchema = z.object({
+      action: z.enum(["detect", "preview", "import"]),
+      target: z.enum(["expenses", "revenue", "invoices"]),
+    });
+
+    const paramsParsed = CsvImportParamsSchema.safeParse({ action, target });
+    if (!paramsParsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: paramsParsed.error.issues }, { status: 400 });
     }
 
     const csvText = await file.text();
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest) {
         switch (target) {
           case "expenses": {
             const result = await prisma.expense.createMany({
-              data: records as any[],
+              data: records as Prisma.ExpenseCreateManyInput[],
               skipDuplicates: true,
             });
             imported = result.count;
@@ -117,7 +126,7 @@ export async function POST(request: NextRequest) {
           }
           case "revenue": {
             const result = await prisma.revenue.createMany({
-              data: records as any[],
+              data: records as Prisma.RevenueCreateManyInput[],
               skipDuplicates: true,
             });
             imported = result.count;
@@ -125,7 +134,7 @@ export async function POST(request: NextRequest) {
           }
           case "invoices": {
             const result = await prisma.invoice.createMany({
-              data: records as any[],
+              data: records as Prisma.InvoiceCreateManyInput[],
               skipDuplicates: true,
             });
             imported = result.count;
@@ -133,7 +142,7 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (err) {
-        console.error("Bulk insert error:", err);
+        log.error("Bulk insert error", { module: "import", action: "csv", error: toLogError(err) });
         failed = records.length;
       }
 
@@ -162,7 +171,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
-    console.error("CSV import error:", error);
+    log.error("CSV import error", { module: "import", action: "csv", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to process import" },
       { status: 500 }

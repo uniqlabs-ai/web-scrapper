@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { requirePermission } from "@/lib/guards";
+import { rateLimit } from "@/lib/rate-limit";
+import { logAudit } from "@/lib/audit";
+import { CreateCategorySchema } from "@/lib/schemas";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/categories — List expense categories
  */
 export async function GET() {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const categories = await prisma.expenseCategory.findMany({
-      where: { userId },
+      where: { organizationId, userId },
       orderBy: { name: "asc" },
       include: { _count: { select: { expenses: true } } },
+      take: 500, // RELIABILITY: Query boundary
     });
     return NextResponse.json(categories);
   } catch (error) {
-    console.error("Categories error:", error);
+    log.error("Categories error", { module: "categories", action: "handler", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to fetch categories" },
       { status: 500 }
@@ -28,25 +34,23 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
-    const body = await request.json();
+    const limited = rateLimit(request, { windowSec: 60, max: 20, prefix: "categories" });
+    if (limited) return limited;
+    const { userId, organizationId } = await requireTenant();
+    const raw = await request.json();
+    const result = CreateCategorySchema.safeParse(raw);
 
-    if (!body.name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    if (!result.success) {
+      return NextResponse.json({ error: "Invalid payload", details: result.error.issues }, { status: 400 });
     }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { organizationId: true },
-    });
 
     const category = await prisma.expenseCategory.create({
       data: {
-        name: body.name,
-        icon: body.icon || null,
-        color: body.color || null,
+        name: result.data.name,
+        icon: result.data.icon || null,
+        color: result.data.color || null,
         userId,
-        organizationId: user?.organizationId || null,
+        organizationId,
       },
     });
 
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
-    console.error("Create category error:", error);
+    log.error("Create category error", { module: "categories", action: "handler", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to create category" },
       { status: 500 }
@@ -72,7 +76,10 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const guard = await requirePermission("delete");
+    if (!guard.allowed) return guard.response;
+    const { userId, organizationId } = guard;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -80,13 +87,16 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    await prisma.expenseCategory.delete({
-      where: { id, userId },
-    });
+    const category = await prisma.expenseCategory.findFirst({ where: { id, organizationId } });
+    if (!category) {
+      return NextResponse.json({ error: "Category not found" }, { status: 404 });
+    }
 
+    await prisma.expenseCategory.delete({ where: { id } });
+    logAudit({ userId, action: "delete", resource: "category", resourceId: id, details: { name: category.name } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete category error:", error);
+    log.error("Delete category error", { module: "categories", action: "handler", error: toLogError(error) });
     return NextResponse.json(
       { error: "Failed to delete category" },
       { status: 500 }

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/reports/aging — Accounts Receivable & Payable aging
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") || "receivable"; // receivable | payable
 
@@ -16,8 +17,10 @@ export async function GET(request: NextRequest) {
     if (type === "receivable") {
       // Invoices that are sent or overdue (money owed TO us)
       const invoices = await prisma.invoice.findMany({
+      take: 10000,
         where: {
           userId,
+          organizationId,
           status: { in: ["sent", "overdue", "partial"] },
         },
         include: {
@@ -66,7 +69,8 @@ export async function GET(request: NextRequest) {
       // Payable: expenses without receipts or unreconciled (simplified)
       // In a full system this would track vendor bills
       const recentExpenses = await prisma.expense.findMany({
-        where: { userId, date: { gte: new Date(now.getTime() - 90 * 86400000) } },
+      take: 10000,
+        where: { userId, organizationId, date: { gte: new Date(now.getTime() - 90 * 86400000) } },
         include: { category: true },
         orderBy: { date: "desc" },
       });
@@ -88,7 +92,7 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("Aging report error:", error);
+    log.error("Aging report error", { module: "reports", action: "aging", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to generate aging report" }, { status: 500 });
   }
 }

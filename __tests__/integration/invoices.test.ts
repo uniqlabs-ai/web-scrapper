@@ -51,6 +51,22 @@ describe('GET /api/invoices', () => {
     expect(mp.invoice.findMany).toHaveBeenCalledWith(expect.objectContaining({take:500}));
   });
 
+  it('returns empty invoices if user has no organizationId', async () => {
+    mp.user.findUnique.mockResolvedValue({ id:'u1', organizationId:null } as any);
+    const res = await GET(req());
+    const d = await res.json();
+    expect(res.status).toBe(200);
+    expect(d.invoices).toEqual([]);
+  });
+
+  it('returns empty invoices if user not found', async () => {
+    mp.user.findUnique.mockResolvedValue(null);
+    const res = await GET(req());
+    const d = await res.json();
+    expect(res.status).toBe(200);
+    expect(d.invoices).toEqual([]);
+  });
+
   it('returns 500 on error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(req()); expect(res.status).toBe(500);

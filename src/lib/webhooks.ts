@@ -1,115 +1,92 @@
+import { prisma } from "./prisma";
+import crypto from "crypto";
+import { log, toLogError } from "./logger";
+
 /**
- * Heartbeat Protocol — Webhook Event Sender
- *
- * Sends domain events to the Founder OS Orchestrator webhooks.
- * Events are fire-and-forget; failures are logged but not re-thrown.
- * Signed with HMAC-SHA256 for authenticity.
+ * Create an HMAC-SHA256 signature for a webhook payload.
+ * Returns empty string if no secret is available (webhook will be skipped).
  */
-
-import { createHmac } from "crypto";
-
-const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
-
-interface WebhookEvent {
-  type: string;
-  source: "finance";
-  payload: Record<string, unknown>;
-  timestamp: string;
+function signPayload(payload: string, secret: string): string {
+  return crypto.createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-function signPayload(body: string, timestamp: string): string {
-  if (!WEBHOOK_SECRET) return "";
-  const data = `${timestamp}.${body}`;
-  return createHmac("sha256", WEBHOOK_SECRET).update(data).digest("hex");
-}
-
-export async function sendWebhookEvent(
-  type: string,
-  payload: Record<string, unknown>
-): Promise<void> {
-  if (!ORCHESTRATOR_URL) {
-    console.warn("[webhook] ORCHESTRATOR_URL not configured, skipping event:", type);
-    return;
-  }
-
-  const event: WebhookEvent = {
-    type,
-    source: "finance",
-    payload,
-    timestamp: new Date().toISOString(),
-  };
-
+/**
+ * Fires an event to all registered and active webhooks for a specific tenant organization.
+ */
+export async function fireWebhook(organizationId: string, eventName: string, payload: Record<string, unknown>) {
   try {
-    const body = JSON.stringify(event);
-    const timestamp = Date.now().toString();
-    const signature = signPayload(body, timestamp);
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (signature) {
-      headers["X-Webhook-Signature"] = `sha256=${signature}`;
-      headers["X-Webhook-Timestamp"] = timestamp;
-    }
-
-    const res = await fetch(`${ORCHESTRATOR_URL}/api/webhooks/events`, {
-      method: "POST",
-      headers,
-      body,
-      signal: AbortSignal.timeout(5000),
+    const webhooks = await prisma.webhook.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+      },
+      take: 100, // RELIABILITY: Safety ceiling
     });
 
-    if (!res.ok) {
-      console.error(`[webhook] Failed to send ${type}: ${res.status} ${res.statusText}`);
-    }
+    if (webhooks.length === 0) return;
+
+    // Filter webhooks that listen to this specific event (or wildcard "*")
+    const targets = webhooks.filter(wh => {
+      try {
+        const parsedEvents = JSON.parse(wh.events);
+        return Array.isArray(parsedEvents) && (parsedEvents.includes(eventName) || parsedEvents.includes("*"));
+      } catch {
+        return false;
+      }
+    });
+
+    if (targets.length === 0) return;
+
+    const payloadString = JSON.stringify({
+      event: eventName,
+      timestamp: new Date().toISOString(),
+      data: payload,
+    });
+
+    // Fire asynchronously
+    Promise.allSettled(targets.map(async (webhook) => {
+      // Require a real secret — skip webhooks with no secret configured
+      const secret = webhook.secret || process.env.WEBHOOK_SECRET;
+      if (!secret) {
+        log.warn("Webhook skipped — no secret configured", { module: "webhooks", action: "fire", meta: { url: webhook.url, event: eventName } });
+        return;
+      }
+
+      try {
+        await fetch(webhook.url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Finance-Event": eventName,
+            "X-Finance-Signature": signPayload(payloadString, secret),
+          },
+          body: payloadString,
+          signal: AbortSignal.timeout(5000),
+        });
+      } catch (err) {
+        log.error("Webhook dispatch failed", { module: "webhooks", action: "fire", meta: { url: webhook.url, event: eventName }, error: toLogError(err) });
+      }
+    }));
+    
   } catch (error) {
-    console.error(`[webhook] Error sending ${type}:`, error);
+    log.error("Webhook dispatcher error", { module: "webhooks", action: "dispatch", meta: { organizationId }, error: toLogError(error) });
   }
 }
 
-// Convenience helpers for common Finance events
-export const webhookEvents = {
-  invoiceCreated: (invoiceId: string, total: number) =>
-    sendWebhookEvent("invoice.created", { invoiceId, total }),
+/**
+ * Verify an inbound HMAC-SHA256 webhook signature using timing-safe comparison.
+ * Fail-closed: returns false if secret is missing.
+ */
+export function verifyWebhookSignature(body: string, signature: string, secret?: string): boolean {
+  const effectiveSecret = secret || process.env.WEBHOOK_SECRET;
+  if (!effectiveSecret) return false; // Fail-closed
 
-  invoiceSent: (invoiceId: string, total: number) =>
-    sendWebhookEvent("invoice.sent", { invoiceId, total }),
+  const expected = crypto.createHmac("sha256", effectiveSecret).update(body).digest("hex");
 
-  invoicePaid: (invoiceId: string, total: number) =>
-    sendWebhookEvent("invoice.paid", { invoiceId, total }),
+  const sigBuf = Buffer.from(signature, "hex");
+  const expBuf = Buffer.from(expected, "hex");
 
-  expenseLogged: (expenseId: string, amount: number, category?: string) =>
-    sendWebhookEvent("expense.logged", { expenseId, amount, category }),
+  if (sigBuf.length !== expBuf.length) return false;
 
-  runwayAlert: (runwayMonths: number) =>
-    sendWebhookEvent("runway.alert", { runwayMonths }),
-
-  revenueRecorded: (revenueId: string, amount: number) =>
-    sendWebhookEvent("revenue.recorded", { revenueId, amount }),
-
-  monthlyReport: (report: {
-    totalRevenue: number;
-    totalExpenses: number;
-    netIncome: number;
-    runwayMonths: number;
-    month: string;
-  }) => sendWebhookEvent("finance.monthly-report", report),
-
-  runwayCritical: (runwayMonths: number, cashInBank: number) =>
-    sendWebhookEvent("finance.runway-critical", {
-      runwayMonths,
-      cashInBank,
-      severity: runwayMonths <= 1 ? "critical" : "warning",
-      message: `Runway is ${runwayMonths} month(s) — immediate action required`,
-    }),
-
-  budgetExceeded: (category: string, spent: number, limit: number) =>
-    sendWebhookEvent("finance.budget-exceeded", {
-      category,
-      spent,
-      limit,
-      overage: spent - limit,
-      message: `Budget for "${category}" exceeded: ₹${spent.toLocaleString()} / ₹${limit.toLocaleString()}`,
-    }),
-};
+  return crypto.timingSafeEqual(sigBuf, expBuf);
+}

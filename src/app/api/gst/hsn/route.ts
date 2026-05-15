@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { log, toLogError } from "@/lib/logger";
 
 /**
  * GET /api/gst/hsn — HSN/SAC code library for Indian goods and services
  */
 
+// HSN/SAC code library — GST rates verified for FY 2025-26
 const HSN_CODES = [
   // Services (SAC codes)
   { code: "998311", description: "Management consulting services", gstRate: 18 },
@@ -37,12 +39,12 @@ const HSN_CODES = [
   { code: "8471", description: "Computers and laptops", gstRate: 18 },
   { code: "8473", description: "Computer parts and accessories", gstRate: 18 },
   { code: "8443", description: "Printers and scanners", gstRate: 18 },
-  { code: "8517", description: "Mobile phones and telecom equipment", gstRate: 12 },
+  { code: "8517", description: "Mobile phones and telecom equipment", gstRate: 18 },
   { code: "8528", description: "Monitors and displays", gstRate: 18 },
   { code: "9403", description: "Office furniture", gstRate: 18 },
   { code: "4820", description: "Stationery and paper", gstRate: 12 },
   { code: "4901", description: "Printed books", gstRate: 0 },
-  { code: "2201", description: "Water (packaged)", gstRate: 18 },
+  { code: "2201", description: "Packaged drinking water", gstRate: 5 },
   { code: "0901", description: "Coffee and tea", gstRate: 5 },
   { code: "8523", description: "Software (physical media)", gstRate: 18 },
 ];
@@ -64,7 +66,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("HSN error:", error);
+    log.error("HSN error", { module: "gst", action: "hsn", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

@@ -30,16 +30,83 @@ function req(method='GET', body?:unknown, url='http://localhost:3008/api/expense
 }
 
 describe('POST /api/expenses/ocr', () => {
-  it('handles POST successfully', async () => {
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeLessThan(600);
+  it('handles JSON body successfully', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const res = await POST(req('POST', { image: 'data:image/jpeg;base64,abc', mimeType: 'image/jpeg', fileName: 'test.jpg' }));
+    expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toBeDefined();
+    expect(data.receipt).toBeDefined();
+    expect(data.extracted).toBeDefined();
   });
 
-  it('handles tenant error', async () => {
+  it('handles multipart/form-data successfully', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const formData = new FormData();
+    const file = new File(['dummy content'], 'test.png', { type: 'image/png' });
+    formData.append('file', file);
+    
+    const init = { method: 'POST', body: formData, headers: { 'Content-Type': 'multipart/form-data; boundary=---' } };
+    const request = new NextRequest(new URL('http://localhost:3008/api/expenses/ocr'), init as any);
+    
+    // Polyfill formData for NextRequest
+    request.formData = async () => formData;
+    
+    const res = await POST(request);
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 400 when multipart form has no file', async () => {
+    const formData = new FormData();
+    const init = { method: 'POST', body: formData, headers: { 'Content-Type': 'multipart/form-data; boundary=---' } };
+    const request = new NextRequest(new URL('http://localhost:3008/api/expenses/ocr'), init as any);
+    request.formData = async () => formData;
+    
+    const res = await POST(request);
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when JSON body has no image', async () => {
+    const res = await POST(req('POST', { }));
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 503 when GEMINI_API_KEY is not configured', async () => {
+    process.env.GEMINI_API_KEY = '';
+    const res = await POST(req('POST', { image: 'base64str' }));
+    expect(res.status).toBe(503);
+  });
+
+  it('uses default mimeType/fileName when not provided in JSON body', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const res = await POST(req('POST', { image: 'abc123' }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.receipt).toBeDefined();
+  });
+
+  it('handles tenant error returning 500', async () => {
     mt.mockRejectedValue(new Error('fail'));
-    const res = await POST(req('POST', {"name":"Test","description":"Test description","amount":5000,"vendor":"Vendor","category":"Software","date":"2025-01-15","currency":"INR","email":"test@test.com","type":"bank","accountType":"bank","currentBalance":0,"status":"active","employeeName":"John","grossSalary":100000,"payPeriod":"monthly","deductions":{"pf":5000,"tax":15000},"frequency":"monthly","clientId":"c1","items":[{"description":"Item 1","quantity":1,"rate":5000}],"organizationId":"org-1","planId":"pro","section":"194C","rate":2}));
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    const res = await POST(req('POST', { image: 'base64str' }));
+    expect(res.status).toBe(500);
+  });
+
+  it('handles multipart file with no explicit type (falls back to image/jpeg)', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const formData = new FormData();
+    const file = new File(['data'], '', { type: '' });
+    formData.append('file', file);
+
+    const init = { method: 'POST', body: formData, headers: { 'Content-Type': 'multipart/form-data; boundary=---' } };
+    const request = new NextRequest(new URL('http://localhost:3008/api/expenses/ocr'), init as any);
+    request.formData = async () => formData;
+
+    const res = await POST(request);
+    expect(res.status).toBe(200);
+  });
+
+  it('strips data URI prefix from base64 image', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const res = await POST(req('POST', { image: 'data:image/png;base64,abc123' }));
+    expect(res.status).toBe(200);
   });
 });

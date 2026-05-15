@@ -14,6 +14,7 @@ import { ExpenseDetailDrawer } from "@/components/item-detail-drawer";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, ColumnDef } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
+import { StaggerContainer, SlideUp } from "@/components/animations";
 import { TablePageSkeleton } from "@/components/page-skeleton";
 import { AccessibleModal } from "@/components/accessible-modal";
 
@@ -383,19 +384,26 @@ function ExpensesContent() {
       {/* TAB: Overview */}
       {activeTab === "overview" && (
         <div>
-          <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
+          <StaggerContainer className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
+            <SlideUp delay={0}>
             <div className="kpi-card red">
               <div className="kpi-label">{hasActiveFilters ? "Filtered Total" : "Total Expenses"}</div>
               <div className="kpi-value" style={{ fontSize: 24 }}>{formatCurrency(totalExpenses)}</div>
             </div>
+            </SlideUp>
+            <SlideUp delay={0.05}>
             <div className="kpi-card amber">
               <div className="kpi-label">This Month</div>
               <div className="kpi-value" style={{ fontSize: 24 }}>{formatCurrency(thisMonth)}</div>
             </div>
+            </SlideUp>
+            <SlideUp delay={0.1}>
             <div className="kpi-card purple">
               <div className="kpi-label">Avg Monthly Burn</div>
               <div className="kpi-value" style={{ fontSize: 24 }}>{formatCurrency(avgMonthly)}</div>
             </div>
+            </SlideUp>
+            <SlideUp delay={0.15}>
             <div className="kpi-card blue">
               <div className="kpi-label">Transactions</div>
               <div className="kpi-value" style={{ fontSize: 24 }}>{filteredExpenses.length}</div>
@@ -403,7 +411,8 @@ function ExpensesContent() {
                 {cats.length} categories · {topVendors.length} vendors
               </div>
             </div>
-          </div>
+            </SlideUp>
+          </StaggerContainer>
 
           {/* AI Accuracy Card */}
           {confStats && confStats.total > 0 && (

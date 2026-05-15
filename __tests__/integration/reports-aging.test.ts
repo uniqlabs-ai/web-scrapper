@@ -3,8 +3,8 @@ import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    invoice: { findMany: vi.fn().mockResolvedValue([{"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":50000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"c1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"total":10000,"subtotal":10000,"tax":1800,"client":{"id":"c1","name":"Client","email":"c@t.com"}}]) },
-    expense: { findMany: vi.fn().mockResolvedValue([{"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Test description","date":"2025-01-15T00:00:00.000Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"recurring","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[]}]) }
+    invoice: { findMany: vi.fn() },
+    expense: { findMany: vi.fn() }
   },
 }));
 vi.mock('@/lib/tenant', () => ({ requireTenant: vi.fn(), TenantError: class extends Error { constructor(m:string){super(m);this.name='TenantError'} } }));
@@ -14,32 +14,76 @@ import { prisma } from '@/lib/prisma';
 import { requireTenant } from '@/lib/tenant';
 import { GET } from '@/app/api/reports/aging/route';
 
-import { mockPrisma } from '../helpers/prisma-mock';
-const mp = mockPrisma(prisma);
+const mp = vi.mocked(prisma);
 const mt = vi.mocked(requireTenant);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mt.mockResolvedValue({ userId: 'u1', organizationId: 'org-1' });
+
+  (mp.invoice.findMany as any).mockResolvedValue([]);
+  (mp.expense.findMany as any).mockResolvedValue([]);
 });
 
-function req(method='GET', body?:unknown, url='http://localhost:3008/api/reports/aging'): NextRequest {
-  const init: Record<string,unknown> = { method };
-  if (body) { init.body=JSON.stringify(body); init.headers={'Content-Type':'application/json'}; }
-  return new NextRequest(new URL(url), init);
+function req(type?: string): NextRequest {
+  const url = new URL('http://localhost:3008/api/reports/aging');
+  if (type) url.searchParams.set('type', type);
+  return new NextRequest(url);
 }
 
 describe('GET /api/reports/aging', () => {
-  it('handles GET successfully', async () => {
-    const res = await GET(req());
-    expect(res.status).toBeLessThan(600);
+  it('returns receivable report with different aging buckets', async () => {
+    const now = new Date();
+    const d0 = new Date(now.getTime() + 86400000); // Future (current)
+    const d15 = new Date(now.getTime() - 15 * 86400000); // d1_30
+    const d45 = new Date(now.getTime() - 45 * 86400000); // d31_60
+    const d75 = new Date(now.getTime() - 75 * 86400000); // d61_90
+    const d100 = new Date(now.getTime() - 100 * 86400000); // d90_plus
+
+    (mp.invoice.findMany as any).mockResolvedValue([
+      { id: '1', invoiceNumber: 'INV-1', total: 1000, dueDate: d0, issueDate: d0, status: 'sent', payments: [] },
+      { id: '2', invoiceNumber: 'INV-2', total: 2000, dueDate: d15, issueDate: d15, status: 'overdue', payments: [{ amount: 500 }] },
+      { id: '3', invoiceNumber: 'INV-3', total: 3000, dueDate: d45, issueDate: d45, status: 'overdue', payments: [], client: { name: 'Acme' } },
+      { id: '4', invoiceNumber: 'INV-4', total: 4000, dueDate: d75, issueDate: d75, status: 'overdue', payments: [] },
+      { id: '5', invoiceNumber: 'INV-5', total: 5000, dueDate: d100, issueDate: d100, status: 'overdue', payments: [] },
+    ]);
+
+    const res = await GET(req('receivable'));
+    expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toBeDefined();
+    
+    expect(data.type).toBe('receivable');
+    expect(data.buckets.current).toBe(1000);
+    expect(data.buckets.d1_30).toBe(1500); // 2000 - 500
+    expect(data.buckets.d31_60).toBe(3000);
+    expect(data.buckets.d61_90).toBe(4000);
+    expect(data.buckets.d90_plus).toBe(5000);
+    expect(data.totalOutstanding).toBe(14500);
+  });
+
+  it('returns payable report', async () => {
+    (mp.expense.findMany as any).mockResolvedValue([
+      { id: '1', amount: 500, description: 'AWS', date: new Date(), vendor: 'Amazon', category: { name: 'Software' } }
+    ]);
+
+    const res = await GET(req('payable'));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    
+    expect(data.type).toBe('payable');
+    expect(data.totalPayable).toBe(500);
+    expect(data.items.length).toBe(1);
+    expect(data.items[0].category).toBe('Software');
+  });
+
+  it('defaults to receivable if type is not provided', async () => {
+    await GET(req());
+    expect(mp.invoice.findMany).toHaveBeenCalled();
   });
 
   it('handles tenant error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET(req());
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBe(500);
   });
 });

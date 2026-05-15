@@ -1,6 +1,7 @@
 /**
  * TDS (Tax Deducted at Source) rates and utilities
- * Based on Indian Income Tax Act sections commonly used by startups/SMBs
+ * Based on Indian Income Tax Act — Updated for FY 2025-26 (effective 1 Apr 2025)
+ * Reference: Finance Act 2025 (Union Budget 2025-26)
  */
 
 export interface TDSSection {
@@ -11,16 +12,19 @@ export interface TDSSection {
   panAbsentRate: number; // rate when PAN not available (usually 20%)
 }
 
+// FY 2025-26 TDS rate table — verified against Finance Act 2025
 export const TDS_SECTIONS: TDSSection[] = [
   { section: "194C", description: "Contractor payments (individuals/HUF)", rate: 1, threshold: 30000, panAbsentRate: 20 },
   { section: "194C", description: "Contractor payments (others)", rate: 2, threshold: 30000, panAbsentRate: 20 },
-  { section: "194J(a)", description: "Professional fees — technical services", rate: 2, threshold: 30000, panAbsentRate: 20 },
-  { section: "194J(b)", description: "Professional fees — others", rate: 10, threshold: 30000, panAbsentRate: 20 },
-  { section: "194H", description: "Commission / brokerage", rate: 5, threshold: 15000, panAbsentRate: 20 },
-  { section: "194I(a)", description: "Rent — machinery/equipment", rate: 2, threshold: 240000, panAbsentRate: 20 },
-  { section: "194I(b)", description: "Rent — land/building", rate: 10, threshold: 240000, panAbsentRate: 20 },
-  { section: "194A", description: "Interest (other than bank)", rate: 10, threshold: 5000, panAbsentRate: 20 },
-  { section: "194D", description: "Insurance commission", rate: 5, threshold: 15000, panAbsentRate: 20 },
+  { section: "194J(a)", description: "Professional fees — technical services", rate: 2, threshold: 50000, panAbsentRate: 20 },
+  { section: "194J(b)", description: "Professional fees — others", rate: 10, threshold: 50000, panAbsentRate: 20 },
+  { section: "194H", description: "Commission / brokerage", rate: 2, threshold: 20000, panAbsentRate: 20 },
+  { section: "194I(a)", description: "Rent — machinery/equipment", rate: 2, threshold: 600000, panAbsentRate: 20 },
+  { section: "194I(b)", description: "Rent — land/building", rate: 10, threshold: 600000, panAbsentRate: 20 },
+  { section: "194A", description: "Interest (other than bank)", rate: 10, threshold: 10000, panAbsentRate: 20 },
+  { section: "194A_BANK", description: "Interest (bank/co-op/post office)", rate: 10, threshold: 50000, panAbsentRate: 20 },
+  { section: "194A_SENIOR", description: "Interest (bank — senior citizen)", rate: 10, threshold: 100000, panAbsentRate: 20 },
+  { section: "194D", description: "Insurance commission", rate: 5, threshold: 20000, panAbsentRate: 20 },
   { section: "194Q", description: "Purchase of goods", rate: 0.1, threshold: 5000000, panAbsentRate: 5 },
   { section: "194R", description: "Benefits / perquisites", rate: 10, threshold: 20000, panAbsentRate: 20 },
   { section: "194S", description: "Virtual digital assets (crypto)", rate: 1, threshold: 10000, panAbsentRate: 20 },

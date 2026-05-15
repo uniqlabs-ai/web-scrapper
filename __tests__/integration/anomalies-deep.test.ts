@@ -110,6 +110,41 @@ describe('GET /api/anomalies', () => {
     expect(unusual[0].severity).toBe('high');
   });
 
+  it('handles zero monthly totals for current and prev month', async () => {
+    const now = new Date();
+    const m1 = new Date(now.getFullYear(), now.getMonth(), 5);
+    const m2 = new Date(now.getFullYear(), now.getMonth() - 1, 5);
+    const expenses = [
+      makeExpense({ amount: 0, date: m1, category: { name: 'Cat A' } }),
+      makeExpense({ amount: 0, date: m2, category: { name: 'Cat B' } }),
+    ];
+    mp.expense.findMany.mockResolvedValue(expenses as any);
+    const res = await GET();
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    const unusual = data.anomalies.filter((a: any) => a.type === 'spike');
+    expect(unusual.length).toBe(0);
+  });
+
+  it('detects unusually large single transaction with missing vendor/description', async () => {
+    const now = new Date();
+    const m1 = new Date(now.getFullYear(), now.getMonth(), 5);
+    const smallExpenses = Array.from({ length: 10 }, (_, i) =>
+      makeExpense({ id: `s${i}`, amount: 100, date: new Date(now.getFullYear(), now.getMonth() - (i % 5) - 1, 5) })
+    );
+    const expenses = [
+      makeExpense({ amount: 500000, date: m1, description: '', vendor: '', category: { name: 'Equipment' } }),
+      ...smallExpenses,
+    ];
+    mp.expense.findMany.mockResolvedValue(expenses as any);
+    const res = await GET();
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    const unusual = data.anomalies.filter((a: any) => a.type === 'unusual_amount');
+    expect(unusual.length).toBeGreaterThanOrEqual(1);
+    expect(unusual[0].title).toContain('Unknown');
+  });
+
   it('detects budget warning (> 90% of limit)', async () => {
     const now = new Date();
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 5);
@@ -140,6 +175,21 @@ describe('GET /api/anomalies', () => {
     const budgetWarnings = data.anomalies.filter((a: any) => a.type === 'budget_warning');
     expect(budgetWarnings.length).toBe(1);
     expect(budgetWarnings[0].severity).toBe('high');
+  });
+
+  it('ignores budget when spent is well below limit', async () => {
+    const now = new Date();
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 5);
+    mp.expense.findMany.mockResolvedValue([
+      makeExpense({ amount: 10000, date: currentMonth, category: { name: 'Software' } }),
+    ] as any);
+    mp.budgetThreshold.findMany.mockResolvedValue([
+      { category: 'Software', monthlyLimit: 50000 }
+    ] as any);
+    const res = await GET();
+    const data = await res.json();
+    const budgetWarnings = data.anomalies.filter((a: any) => a.type === 'budget_warning');
+    expect(budgetWarnings.length).toBe(0);
   });
 
   it('sorts anomalies by severity', async () => {

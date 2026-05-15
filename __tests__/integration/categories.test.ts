@@ -80,6 +80,12 @@ describe('POST /api/categories', () => {
     const res = await POST(req('POST','http://localhost:3008/api/categories',{ name:'New' }));
     expect(res.status).toBe(500);
   });
+
+  it('returns 500 on string error (non-Error)', async () => {
+    (mp.expenseCategory.create as any).mockRejectedValue('Unique constraint failed');
+    const res = await POST(req('POST','http://localhost:3008/api/categories',{ name:'New' }));
+    expect(res.status).toBe(409);
+  });
 });
 
 describe('DELETE /api/categories', () => {

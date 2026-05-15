@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Shield, RefreshCw, Search, User, Clock } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 interface AuditEntry {
   id: string;
@@ -60,11 +61,11 @@ export default function AuditPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: 60, color: "var(--text-secondary)" }}>Loading audit trail...</div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 60, background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)" }}>
-          <Shield size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <h3 style={{ margin: "0 0 8px" }}>No audit entries</h3>
-          <p style={{ margin: 0, color: "var(--text-secondary)" }}>Activity will appear here as users interact with the system</p>
-        </div>
+        <EmptyState
+          icon={Shield}
+          title={filter ? "No matching entries" : "No audit entries"}
+          description={filter ? "Try adjusting your search filter." : "Activity will appear here as users interact with the system."}
+        />
       ) : (
         <div className="table-container">
           <table>

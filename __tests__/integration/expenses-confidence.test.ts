@@ -3,42 +3,65 @@ import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    bankTransaction: { findMany: vi.fn().mockResolvedValue([{"id":"test-id-1","userId":"u1","organizationId":"org-1","name":"Test Item","email":"test@test.com","fullName":"Test User","amount":5000,"description":"Payment","date":"2026-05-13T00:31:19.288Z","createdAt":"2026-05-13T00:31:19.257Z","updatedAt":"2026-05-13T00:31:19.257Z","status":"active","type":"credit","currency":"INR","role":"admin","month":"2025-01-01T00:00:00.000Z","vendor":"Test Vendor","category":"Software","source":"manual","sourceId":"src-1","notes":"Test notes","number":"INV-001","dueDate":"2025-02-15T00:00:00.000Z","clientId":"client-1","planTier":"pro","avatarUrl":null,"aliases":"[]","isRecurring":false,"taxRate":18,"tags":"[]","department":"engineering","periodStart":"2025-01-01T00:00:00.000Z","periodEnd":"2025-01-31T00:00:00.000Z","entries":[],"items":[],"lineItems":[],"accountId":"acc-1"}]) }
+    bankTransaction: { findMany: vi.fn() }
   },
 }));
+
 vi.mock('@/lib/tenant', () => ({ requireTenant: vi.fn(), TenantError: class extends Error { constructor(m:string){super(m);this.name='TenantError'} } }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
 
 import { prisma } from '@/lib/prisma';
 import { requireTenant } from '@/lib/tenant';
 import { GET } from '@/app/api/expenses/confidence/route';
-
 import { mockPrisma } from '../helpers/prisma-mock';
-const mp = mockPrisma(prisma);
+
 const mt = vi.mocked(requireTenant);
+const mp = mockPrisma(prisma);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mt.mockResolvedValue({ userId: 'u1', organizationId: 'org-1' });
 });
 
-function req(method='GET', body?:unknown, url='http://localhost:3008/api/expenses/confidence'): NextRequest {
-  const init: Record<string,unknown> = { method };
-  if (body) { init.body=JSON.stringify(body); init.headers={'Content-Type':'application/json'}; }
-  return new NextRequest(new URL(url), init);
-}
+describe('/api/expenses/confidence', () => {
+  describe('GET', () => {
+    it('returns 0 rates for empty transactions', async () => {
+      mp.bankTransaction.findMany.mockResolvedValue([]);
+      const res = await GET();
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.categorizationRate).toBe(0);
+      expect(data.reconciliationRate).toBe(0);
+      expect(data.avgConfidence).toBe(0);
+    });
 
-describe('GET /api/expenses/confidence', () => {
-  it('handles GET successfully', async () => {
-    const res = await GET(req());
-    expect(res.status).toBeLessThan(600);
-    const data = await res.json();
-    expect(data).toBeDefined();
-  });
+    it('calculates metrics correctly', async () => {
+      mp.bankTransaction.findMany.mockResolvedValue([
+        { id: '1', confidence: 0.95, category: 'Software', isReconciled: true }, // High
+        { id: '2', confidence: 0.8, category: 'Travel', isReconciled: false }, // Medium
+        { id: '3', confidence: 0.5, category: 'Office', isReconciled: false }, // Low
+        { id: '4', confidence: null, category: null, isReconciled: false } // Uncategorized
+      ] as any);
 
-  it('handles tenant error', async () => {
-    mt.mockRejectedValue(new Error('fail'));
-    const res = await GET(req());
-    expect(res.status).toBeGreaterThanOrEqual(400);
+      const res = await GET();
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.total).toBe(4);
+      expect(data.categorized).toBe(3);
+      expect(data.uncategorized).toBe(1);
+      expect(data.categorizationRate).toBe(75); // 3/4
+      expect(data.avgConfidence).toBe(75); // (0.95+0.8+0.5) / 3 = 0.75 * 100
+      expect(data.highConfidence).toBe(1);
+      expect(data.mediumConfidence).toBe(1);
+      expect(data.lowConfidence).toBe(1);
+      expect(data.reconciled).toBe(1);
+      expect(data.reconciliationRate).toBe(25); // 1/4
+    });
+
+    it('handles unexpected exceptions', async () => {
+      mt.mockRejectedValue(new Error('fail'));
+      const res = await GET();
+      expect(res.status).toBe(500);
+    });
   });
 });

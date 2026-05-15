@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { extractFounderOSToken } from "@/lib/founder-os-jwt";
 import { getRunway, getBurnRate, getRevenueData } from "@/lib/runway";
 import { generatePnL, projectCashFlow } from "@/lib/financial-intelligence";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { CopilotQuerySchema } from "@/lib/schemas";
 
 /**
  * POST /api/v1/copilot/query
@@ -23,39 +25,60 @@ import { getAuthUserId } from "@/lib/auth";
  *   - logExpense
  */
 
-async function resolveUserId(request: NextRequest, orgId?: string): Promise<string> {
+async function resolveIdentity(request: NextRequest, orgId?: string): Promise<{ userId: string; organizationId: string }> {
   // Founder OS JWT takes priority (cross-product calls)
   const token = extractFounderOSToken(request);
-  if (token?.sub) return token.sub;
+  if (token?.sub) {
+    // For cross-product calls, resolve organizationId from token or user record
+    const orgIdResolved = token.organizationId || orgId;
+    if (orgIdResolved) return { userId: token.sub, organizationId: orgIdResolved };
+    // Fallback: look up user's org
+    const user = await prisma.user.findFirst({ where: { id: token.sub }, select: { organizationId: true } });
+    return { userId: token.sub, organizationId: user?.organizationId || '' };
+  }
   // Explicit orgId from request body
-  if (orgId) return orgId;
-  // Session auth (gates demo-user to dev only)
-  return getAuthUserId();
+  if (orgId) {
+    const user = await requireTenant();
+    return { userId: user.userId, organizationId: orgId };
+  }
+  // Session auth
+  return await requireTenant();
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const rawBody = await request.json();
+
+    const parsed = CopilotQuerySchema.safeParse(rawBody);
+
+    if (!parsed.success) {
+
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
+
+    }
+
+    const body = parsed.data;
     const { orgId, query, params } = body;
 
     if (!query) {
       return NextResponse.json({ error: "query is required" }, { status: 400 });
     }
 
-    const userId = await resolveUserId(request, orgId);
+    const { userId, organizationId } = await resolveIdentity(request, orgId);
 
     switch (query) {
       // ── QUERIES ──────────────────────────────────────────
 
       case "getRunway": {
         const [runway, burnRate, revenue] = await Promise.all([
-          getRunway(userId),
-          getBurnRate(userId),
-          getRevenueData(userId),
+          getRunway(userId, organizationId),
+          getBurnRate(userId, organizationId),
+          getRevenueData(userId, organizationId),
         ]);
 
         const unpaidInvoices = await prisma.invoice.findMany({
-          where: { userId, status: { in: ["sent", "overdue"] } },
+      take: 200,
+          where: { userId, organizationId, status: { in: ["sent", "overdue"] } },
           select: { id: true, invoiceNumber: true, total: true, dueDate: true, status: true },
         });
 
@@ -72,7 +95,7 @@ export async function POST(request: NextRequest) {
       }
 
       case "getExpenses": {
-        const where: Record<string, unknown> = { userId };
+        const where: Record<string, unknown> = { userId, organizationId };
         if (params?.category) where.categoryId = params.category;
         if (params?.from || params?.to) {
           where.date = {};
@@ -81,10 +104,10 @@ export async function POST(request: NextRequest) {
         }
 
         const expenses = await prisma.expense.findMany({
+      take: 200,
           where,
           include: { category: true },
           orderBy: { date: "desc" },
-          take: Math.min(params?.limit || 50, 100),
         });
 
         const thisMonth = new Date();
@@ -104,14 +127,14 @@ export async function POST(request: NextRequest) {
       }
 
       case "getInvoices": {
-        const invWhere: Record<string, unknown> = { userId };
+        const invWhere: Record<string, unknown> = { userId, organizationId };
         if (params?.status) invWhere.status = params.status;
 
         const invoices = await prisma.invoice.findMany({
+      take: 200,
           where: invWhere,
           include: { client: true, lineItems: true },
           orderBy: { createdAt: "desc" },
-          take: Math.min(params?.limit || 50, 100),
         });
 
         const outstanding = invoices.filter((i) => ["sent", "overdue"].includes(i.status));
@@ -131,7 +154,7 @@ export async function POST(request: NextRequest) {
 
       case "getCashFlowProjection": {
         const months = Math.min(params?.months || 6, 24);
-        const projection = await projectCashFlow(userId, months);
+        const projection = await projectCashFlow(userId, organizationId, months);
         return NextResponse.json({ success: true, data: projection });
       }
 
@@ -145,7 +168,8 @@ export async function POST(request: NextRequest) {
           : new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
         const deptExpenses = await prisma.expense.findMany({
-          where: { userId, date: { gte: from, lte: to } },
+      take: 200,
+          where: { userId, organizationId, date: { gte: from, lte: to } },
           include: { category: true },
         });
 
@@ -184,13 +208,13 @@ export async function POST(request: NextRequest) {
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
         const [runway, burnRate, revenue, pnl, cashFlow, unpaidCount] = await Promise.all([
-          getRunway(userId),
-          getBurnRate(userId),
-          getRevenueData(userId),
-          generatePnL(userId, monthStart, monthEnd),
-          projectCashFlow(userId, 6),
+          getRunway(userId, organizationId),
+          getBurnRate(userId, organizationId),
+          getRevenueData(userId, organizationId),
+          generatePnL(userId, organizationId, monthStart, monthEnd),
+          projectCashFlow(userId, organizationId, 6),
           prisma.invoice.count({
-            where: { userId, status: { in: ["sent", "overdue"] } },
+            where: { userId, organizationId, status: { in: ["sent", "overdue"] } },
           }),
         ]);
 
@@ -233,7 +257,8 @@ export async function POST(request: NextRequest) {
 
       case "getRevenueByClient": {
         const revenues = await prisma.revenue.findMany({
-          where: { userId },
+      take: 200,
+          where: { userId, organizationId },
           include: { client: true },
           orderBy: { month: "desc" },
         });
@@ -273,7 +298,7 @@ export async function POST(request: NextRequest) {
           );
         }
         const { calculateLineItemTotal } = await import("@/lib/gst");
-        const count = await prisma.invoice.count({ where: { userId } });
+        const count = await prisma.invoice.count({ where: { userId, organizationId } });
         const invoiceNumber = `INV-${String(count + 1).padStart(4, "0")}`;
 
         let subtotal = 0;
@@ -304,6 +329,7 @@ export async function POST(request: NextRequest) {
           data: {
             invoiceNumber,
             userId,
+            organizationId,
             clientId: params.clientId || undefined,
             dueDate: new Date(params.dueDate),
             subtotal,
@@ -330,6 +356,7 @@ export async function POST(request: NextRequest) {
         const expense = await prisma.expense.create({
           data: {
             userId,
+            organizationId,
             description: params.description,
             amount: params.amount,
             categoryId: params.categoryId || undefined,
@@ -355,7 +382,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `Unknown query: ${query}` }, { status: 400 });
     }
   } catch (error) {
-    console.error("Copilot query error:", error);
+    log.error("Copilot query error", { module: "copilot", action: "query", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to execute query" }, { status: 500 });
   }
 }

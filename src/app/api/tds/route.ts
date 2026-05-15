@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
 import { TDS_SECTIONS, calculateTDS, getCurrentQuarter, TDS_QUARTERS } from "@/lib/tds";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const TdsQuerySchema = z.object({
+  quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]).optional(),
+});
 
 /**
  * GET /api/tds — TDS summary, quarterly breakdown, vendor-wise deductions
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
-    const quarter = searchParams.get("quarter") || getCurrentQuarter().quarter;
+
+    const parsed = TdsQuerySchema.safeParse({ quarter: searchParams.get("quarter") || undefined });
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: parsed.error.issues }, { status: 400 });
+    }
+    const quarter = parsed.data.quarter || getCurrentQuarter().quarter;
 
     // Get expenses that have TDS applicable (vendor with PAN, professional services, rent, etc.)
     const now = new Date();
@@ -27,8 +38,10 @@ export async function GET(request: NextRequest) {
     const range = qMap[quarter] || qMap.Q1;
 
     const expenses = await prisma.expense.findMany({
+      take: 10000,
       where: {
         userId,
+        organizationId,
         date: { gte: range.start, lte: range.end },
       },
       include: { category: true },
@@ -74,6 +87,30 @@ export async function GET(request: NextRequest) {
       vendorTDS[vendorName].transactions += 1;
     }
 
+    // Merge Contractor Payroll Runs
+    const contractorRuns = await prisma.payrollRun.findMany({
+      take: 10000,
+      where: {
+        userId,
+        organizationId,
+        runDate: { gte: range.start, lte: range.end },
+        employee: { type: "contractor" }
+      },
+      include: { employee: true },
+    });
+
+    for (const run of contractorRuns) {
+      const vendorName = run.employee.name;
+      const isProfessional = run.employee.paymentBasis === "hourly" || run.employee.designation?.toLowerCase().includes("engineer") || run.employee.designation?.toLowerCase().includes("consultant");
+      const section = isProfessional ? "194J(b)" : "194C";
+
+      if (!vendorTDS[vendorName]) {
+        vendorTDS[vendorName] = { vendor: vendorName, totalAmount: 0, tdsSection: section, tdsRate: 0, tdsAmount: 0, netPayable: 0, transactions: 0 };
+      }
+      vendorTDS[vendorName].totalAmount += Number(run.grossPay);
+      vendorTDS[vendorName].transactions += 1;
+    }
+
     // Calculate TDS for each vendor
     const vendorList = Object.values(vendorTDS).map((v) => {
       const calc = calculateTDS(v.totalAmount, v.tdsSection, true);
@@ -105,7 +142,7 @@ export async function GET(request: NextRequest) {
       currentQuarter: getCurrentQuarter(),
     });
   } catch (error) {
-    console.error("TDS error:", error);
+    log.error("TDS error", { module: "tds", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to generate TDS report" }, { status: 500 });
   }
 }

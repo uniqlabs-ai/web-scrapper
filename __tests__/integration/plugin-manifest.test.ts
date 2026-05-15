@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock prisma before importing the route
 vi.mock('@/lib/prisma', () => ({
@@ -7,10 +7,21 @@ vi.mock('@/lib/prisma', () => ({
     user: { count: vi.fn() },
   },
 }));
+vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, toLogError: vi.fn((e:any)=>({message:e?.message||'Unknown',name:'Error'})) }));
 
 import { GET } from '@/app/api/v1/plugin/manifest/route';
 
 describe('GET /api/v1/plugin/manifest', () => {
+  const origEnv = process.env.NEXT_PUBLIC_APP_URL;
+
+  afterEach(() => {
+    if (origEnv !== undefined) {
+      process.env.NEXT_PUBLIC_APP_URL = origEnv;
+    } else {
+      delete process.env.NEXT_PUBLIC_APP_URL;
+    }
+  });
+
   it('returns valid manifest JSON', async () => {
     const response = await GET();
     const data = await response.json();
@@ -77,10 +88,18 @@ describe('GET /api/v1/plugin/manifest', () => {
     expect(data.webhookEvents).toContain('invoice.paid');
   });
 
-  it('includes a URL with correct default port', async () => {
+  it('uses default URL when NEXT_PUBLIC_APP_URL is not set', async () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
     const response = await GET();
     const data = await response.json();
+    expect(data.url).toBe('http://localhost:3008');
+  });
 
-    expect(data.url).toContain('3008');
+  it('uses NEXT_PUBLIC_APP_URL when set', async () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://finance.founderos.com';
+    const response = await GET();
+    const data = await response.json();
+    expect(data.url).toBe('https://finance.founderos.com');
   });
 });
+

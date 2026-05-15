@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const ReportPdfQuerySchema = z.object({
+  type: z.enum(["pnl", "invoice"]).default("pnl"),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  invoiceId: z.string().min(1).optional(),
+});
 
 /**
  * GET /api/reports/pdf — Generate HTML-based PDF-ready report (P&L or Balance Sheet)
@@ -8,16 +17,23 @@ import { getAuthUserId } from "@/lib/auth";
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type") || "pnl"; // pnl | invoice
-    const from = searchParams.get("from");
-    const to = searchParams.get("to");
-    const invoiceId = searchParams.get("invoiceId");
+
+    const parsed = ReportPdfQuerySchema.safeParse({
+      type: searchParams.get("type") || undefined,
+      from: searchParams.get("from") || undefined,
+      to: searchParams.get("to") || undefined,
+      invoiceId: searchParams.get("invoiceId") || undefined,
+    });
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: parsed.error.issues }, { status: 400 });
+    }
+    const { type, from, to, invoiceId } = parsed.data;
 
     if (type === "invoice" && invoiceId) {
       const invoice = await prisma.invoice.findFirst({
-        where: { id: invoiceId, userId },
+        where: { id: invoiceId, userId, organizationId },
         include: {
           client: true,
           lineItems: true,
@@ -26,7 +42,7 @@ export async function GET(request: NextRequest) {
 
       if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
-      const org = await prisma.organization.findFirst({ where: { users: { some: { id: userId } } } });
+      const org = await prisma.organization.findFirst({ where: { id: organizationId } });
 
       const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Invoice ${invoice.invoiceNumber}</title>
@@ -110,8 +126,8 @@ export async function GET(request: NextRequest) {
     const dateTo = to ? new Date(to) : new Date();
 
     const [revenues, expenses] = await Promise.all([
-      prisma.revenue.findMany({ where: { userId, month: { gte: dateFrom, lte: dateTo } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: dateFrom, lte: dateTo } }, include: { category: true } }),
+      prisma.revenue.findMany({ where: { userId, organizationId, month: { gte: dateFrom, lte: dateTo } }, take: 10_000 }),
+      prisma.expense.findMany({ where: { userId, organizationId, date: { gte: dateFrom, lte: dateTo } }, include: { category: true }, take: 10_000 }),
     ]);
 
     const totalRevenue = revenues.reduce((s, r) => s + Number(r.amount), 0);
@@ -125,7 +141,7 @@ export async function GET(request: NextRequest) {
       expByCategory[cat] = (expByCategory[cat] || 0) + Number(e.amount);
     }
 
-    const fmt = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    const { formatCurrency: fmt } = await import("@/lib/currency");
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Profit & Loss Statement</title>
@@ -169,7 +185,7 @@ export async function GET(request: NextRequest) {
 
     return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   } catch (error) {
-    console.error("PDF report error:", error);
+    log.error("PDF report error", { module: "reports", action: "pdf", error: toLogError(error) });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

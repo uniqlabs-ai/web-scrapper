@@ -1,35 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+// TENANT: auth routes are pre-tenant — user.upsert operates by email identity,
+// organizationId is assigned post-authentication via onboarding flow
+
+const AuthSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  fullName: z.string().max(200).optional(),
+});
 
 export async function GET() {
-  const userId = "demo-user";
+  try {
+    const userId = "demo-user";
 
-  const user = await prisma.user.upsert({
-    where: { email: "demo@finance.app" },
-    update: {},
-    create: {
-      id: userId,
-      email: "demo@finance.app",
-      fullName: "Demo User",
-    },
-  });
+    const user = await prisma.user.upsert({
+      where: { email: "demo@finance.app" },
+      update: {},
+      create: {
+        id: userId,
+        email: "demo@finance.app",
+        fullName: "Demo User",
+      },
+    });
 
-  return NextResponse.json({ user });
+    return NextResponse.json({ user });
+  } catch (error) {
+    log.error("[Auth GET] Error", { module: "auth", action: "handler", error: toLogError(error) });
+    return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { email, fullName } = body;
+  try {
+    const rawBody = await request.json();
+    const parsed = AuthSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
+    }
+    const { email, fullName } = parsed.data;
 
-  if (!email) {
-    return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { fullName },
+      create: { email, fullName },
+    });
+
+    return NextResponse.json({ user });
+  } catch (error) {
+    log.error("[Auth POST] Error", { module: "auth", action: "handler", error: toLogError(error) });
+    return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
   }
-
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: { fullName },
-    create: { email, fullName },
-  });
-
-  return NextResponse.json({ user });
 }

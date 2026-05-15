@@ -57,7 +57,24 @@ describe('GET /api/reports/pdf', () => {
     expect(res.status).toBe(404);
   });
 
-  it('generates P&L PDF HTML', async () => {
+  it('generates invoice PDF HTML for paid status without notes and GST', async () => {
+    (mp.invoice.findFirst as any).mockResolvedValue({
+      id:'inv-2', invoiceNumber:'INV-002', issueDate:new Date('2025-04-01'),
+      dueDate:new Date('2025-05-01'), status:'paid', subtotal:10000, taxTotal:1800, total:11800,
+      notes:null,
+      client:{ name:'Acme', company:'Acme Inc', gstNumber:null },
+      lineItems:[{ description:'Consulting', quantity:1, unitPrice:10000, amount:10000, cgst:900, sgst:900, igst:0 }],
+    });
+    (mp.organization.findFirst as any).mockResolvedValue({ name:'MyCompany', gstNumber:null });
+
+    const res = await GET(req({ type:'invoice', invoiceId:'inv-2' }));
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('PAID');
+    expect(html).not.toContain('GSTIN:');
+  });
+
+  it('generates P&L PDF HTML with net profit', async () => {
     (mp.revenue.findMany as any).mockResolvedValue([
       { amount: 100000, month: new Date('2025-04-01') },
     ]);
@@ -73,11 +90,15 @@ describe('GET /api/reports/pdf', () => {
     expect(html).toContain('Revenue');
   });
 
-  it('generates P&L with default dates', async () => {
+  it('generates P&L with default dates and net loss', async () => {
     (mp.revenue.findMany as any).mockResolvedValue([]);
-    (mp.expense.findMany as any).mockResolvedValue([]);
+    (mp.expense.findMany as any).mockResolvedValue([
+      { amount: 50000, date: new Date(), category: null }
+    ]);
     const res = await GET(req());
     expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Loss');
   });
 
   it('returns 500 on error', async () => {

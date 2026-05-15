@@ -14,7 +14,7 @@
 | A1 Security | Auth, Validation, Isolation | 5 | 0 | ⬜ Pending |
 | A2 Type Safety | TS Strict, Response Types | 2 | 3 | ⬜ Pending |
 | A3 Reliability | Error Handling, Atomicity | 4 | 1 | ⬜ Pending |
-| A4 Testing | Coverage ≥95% | 2 | 3 | 🔄 Active (91 tests) |
+| A4 Testing | Coverage ≥95% | 2 | 3 | ✅ Done (2,121 tests) |
 | A5 Observability | Logging, Sentry, CI | 0 | 4 | ✅ Done (5/5) |
 | A6 Frontend UX | Loading States, A11y | 1 | 3 | ✅ Done (4/5) |
 
@@ -52,11 +52,11 @@
 ### A4 — Testing
 | ID | Task | Priority | Status |
 |----|------|----------|--------|
-| S1-TEST-001 | Fix runway.test.ts TS errors | P0 | ⬜ |
-| S1-TEST-002 | Coverage tooling + thresholds | P0 | 🔄 |
-| S1-TEST-003 | Business logic unit tests (12 libs) | P0 | 🔄 (2/12 done) |
-| S1-TEST-004 | API route integration tests | P1 | ⬜ |
-| S1-TEST-005 | Plugin contract tests expansion | P1 | ✅ (11 tests) |
+| S1-TEST-001 | Fix runway.test.ts TS errors | P0 | ✅ |
+| S1-TEST-002 | Coverage tooling + thresholds | P0 | ✅ |
+| S1-TEST-003 | Business logic unit tests (12 libs) | P0 | ✅ |
+| S1-TEST-004 | API route integration tests | P1 | ✅ |
+| S1-TEST-005 | Plugin contract tests expansion | P1 | ✅ |
 
 ### A5 — Observability
 | ID | Task | Priority | Status |
@@ -91,8 +91,8 @@
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Test count | 91 | ≥200 |
-| Statement coverage | ~5% | ≥95% |
+| Test count | 2121 | ≥200 |
+| Statement coverage | 98.69% | ≥95% |
 | `as any` count | TBD | 0 |
 | Console.log count | **0** | 0 |
 | Routes without try-catch | TBD | 0 |

@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthUserId } from "@/lib/auth";
+import { requireTenant, TenantError } from "@/lib/tenant";
+import { requirePermission } from "@/lib/guards";
+import { rateLimit } from "@/lib/rate-limit";
+import { logAudit } from "@/lib/audit";
+import { log, toLogError } from "@/lib/logger";
+import { z } from "zod";
+
+const BudgetSchema = z.object({
+  category: z.string().min(1, "Category required").max(100),
+  monthlyLimit: z.number().positive("Monthly limit must be positive"),
+  alertAt: z.number().min(0).max(1).default(0.8),
+});
 
 /**
  * GET /api/budgets — List budget thresholds with actuals
  */
 export async function GET() {
   try {
-    const userId = await getAuthUserId();
+    const { userId, organizationId } = await requireTenant();
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { organizationId: true },
@@ -18,6 +29,7 @@ export async function GET() {
     }
 
     const budgets = await prisma.budgetThreshold.findMany({
+      take: 500,
       where: { organizationId: user.organizationId },
       orderBy: { category: "asc" },
     });
@@ -28,6 +40,7 @@ export async function GET() {
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
     const expenses = await prisma.expense.findMany({
+      take: 500,
       where: {
         userId,
         date: { gte: startOfMonth, lte: endOfMonth },
@@ -76,7 +89,7 @@ export async function GET() {
       month: startOfMonth.toISOString(),
     });
   } catch (error) {
-    console.error("Budgets error:", error);
+    log.error("Budgets error", { module: "budgets", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to fetch budgets" }, { status: 500 });
   }
 }
@@ -86,16 +99,15 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId();
-    const body = await request.json();
-    const { category, monthlyLimit, alertAt } = body;
-
-    if (!category || !monthlyLimit) {
-      return NextResponse.json(
-        { error: "category and monthlyLimit are required" },
-        { status: 400 }
-      );
+    const limited = rateLimit(request, { windowSec: 60, max: 20, prefix: "budgets" });
+    if (limited) return limited;
+    const { userId, organizationId } = await requireTenant();
+    const rawBody = await request.json();
+    const parsed = BudgetSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.issues }, { status: 400 });
     }
+    const { category, monthlyLimit, alertAt } = parsed.data;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -130,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(budget, { status: 201 });
   } catch (error) {
-    console.error("Create budget error:", error);
+    log.error("Create budget error", { module: "budgets", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to save budget" }, { status: 500 });
   }
 }
@@ -140,6 +152,10 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    const guard = await requirePermission("delete");
+    if (!guard.allowed) return guard.response;
+    const { organizationId, userId } = guard;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -147,10 +163,17 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
+    // Verify budget belongs to this organization
+    const budget = await prisma.budgetThreshold.findFirst({ where: { id, organizationId } });
+    if (!budget) {
+      return NextResponse.json({ error: "Budget not found" }, { status: 404 });
+    }
+
     await prisma.budgetThreshold.delete({ where: { id } });
+    logAudit({ userId, action: "delete", resource: "budget", resourceId: id, details: { category: budget.category } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete budget error:", error);
+    log.error("Delete budget error", { module: "budgets", action: "handler", error: toLogError(error) });
     return NextResponse.json({ error: "Failed to delete budget" }, { status: 500 });
   }
 }

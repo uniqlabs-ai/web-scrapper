@@ -1,0 +1,466 @@
+
+ RUN  v4.1.6 /Users/nidishramakrishnan/Work/founderOS/finance
+      Coverage enabled with v8
+
+ ✓ __tests__/integration/gst-tds-cfo.test.ts (8 tests) 100ms
+ ✓ __tests__/integration/expenses-approvals.test.ts (7 tests) 20ms
+ ✓ __tests__/integration/alerts-deep.test.ts (12 tests) 61ms
+ ✓ __tests__/integration/expense-breakdown-aging.test.ts (7 tests) 57ms
+ ✓ __tests__/integration/reports.test.ts (8 tests) 83ms
+ ✓ __tests__/integration/invoice-batch.test.ts (8 tests) 181ms
+ ✓ __tests__/integration/organizations-id.test.ts (4 tests) 17ms
+ ✓ __tests__/lib/webhooks.test.ts (14 tests) 335ms
+ ✓ __tests__/integration/vendors-id.test.ts (5 tests) 35ms
+ ✓ __tests__/integration/billing-checkout-deep.test.ts (6 tests) 16ms
+ ✓ __tests__/integration/recurring-expenses-id.test.ts (10 tests) 54ms
+ ✓ __tests__/integration/tds-compute-deep.test.ts (8 tests) 47ms
+ ✓ __tests__/lib/logger.test.ts (16 tests) 566ms
+     ✓ log.error calls console.error  548ms
+ ✓ __tests__/lib/rbac.test.ts (34 tests) 497ms
+     ✓ does not throw on Prisma error (non-blocking)  483ms
+ ✓ __tests__/lib/founder-os-jwt.test.ts (17 tests) 427ms
+     ✓ rejects token in production when FOUNDER_OS_JWT_SECRET is not set  407ms
+ ✓ __tests__/integration/recurring-expenses-id-deep.test.ts (10 tests) 78ms
+ ✓ __tests__/integration/bank-accounts.test.ts (8 tests) 55ms
+ ✓ __tests__/integration/reports-comparison.test.ts (2 tests) 112ms
+ ✓ __tests__/integration/expenses.test.ts (6 tests) 25ms
+ ✓ __tests__/integration/expenses-suggest-category.test.ts (2 tests) 16ms
+ ✓ __tests__/integration/v1-plugin-heartbeat.test.ts (5 tests) 17ms
+ ✓ __tests__/integration/billing-webhook-deep.test.ts (8 tests) 25ms
+ ✓ __tests__/lib/bank-import.test.ts (47 tests) 42ms
+ ✓ __tests__/integration/clients-id.test.ts (11 tests) 39ms
+ ✓ __tests__/integration/vendors-fingerprints-deep.test.ts (7 tests) 50ms
+ ✓ __tests__/integration/receipts-deep.test.ts (21 tests) 33ms
+ ✓ __tests__/integration/tds-form16a-deep.test.ts (4 tests) 21ms
+ ✓ __tests__/integration/import-csv-deep.test.ts (11 tests) 54ms
+ ✓ __tests__/integration/expenses-id.test.ts (4 tests) 85ms
+ ✓ __tests__/integration/reports-pdf.test.ts (5 tests) 72ms
+ ✓ __tests__/integration/vendors.test.ts (7 tests) 32ms
+ ✓ __tests__/integration/v1-plugin-dashboard.test.ts (3 tests) 121ms
+ ✓ __tests__/integration/gst-einvoice.test.ts (5 tests) 73ms
+ ✓ __tests__/integration/v1-invoices.test.ts (10 tests) 68ms
+ ✓ __tests__/integration/integrations-gmail.test.ts (6 tests) 33ms
+ ✓ __tests__/integration/alerts.test.ts (2 tests) 107ms
+ ✓ __tests__/integration/ap-inbox-deep.test.ts (12 tests) 27ms
+ ✓ __tests__/integration/organizations-id-deep.test.ts (8 tests) 21ms
+ ✓ __tests__/lib/pdf.test.ts (8 tests) 232ms
+ ✓ __tests__/integration/reconciliation.test.ts (10 tests) 30ms
+ ✓ __tests__/integration/bank-import-deep.test.ts (15 tests) 138ms
+ ✓ __tests__/integration/revenue.test.ts (11 tests) 27ms
+ ✓ __tests__/lib/financial-intelligence.test.ts (24 tests) 74ms
+ ✓ __tests__/integration/compliance-calendar.test.ts (4 tests) 120ms
+ ✓ __tests__/integration/budgets.test.ts (13 tests) 32ms
+ ✓ __tests__/integration/import-pdf-deep.test.ts (8 tests) 39ms
+ ✓ __tests__/integration/forecast-deep.test.ts (8 tests) 62ms
+ ✓ __tests__/integration/v1-expenses-deep.test.ts (12 tests) 36ms
+ ✓ __tests__/integration/copilot-chat.test.ts (8 tests) 130ms
+ ✓ __tests__/integration/bank-accounts-deep.test.ts (14 tests) 40ms
+ ✓ __tests__/integration/expenses-deep.test.ts (6 tests) 65ms
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles invoice PDF successfully
+INVOICE TEST DATA {
+  success: true,
+  detectedType: 'invoice',
+  label: 'Invoice',
+  summary: 'Invoice undefined — USD 500',
+  details: { client: null, total: null, lineItems: 1, revenueMatch: null },
+  imported: 1
+}
+
+stdout | __tests__/integration/import-smart-deep.test.ts > POST /api/import/smart > handles bank statement PDF successfully
+BANK TEST DATA {
+  success: true,
+  detectedType: 'bank_statement',
+  label: 'Bank Statement',
+  summary: '2 transactions imported from bank (? to ?)',
+  details: {
+    bankName: null,
+    accountNumber: null,
+    period: ' to ',
+    totalTransactions: 2,
+    totalDebit: 0,
+    totalCredit: 0
+  },
+  imported: 2
+}
+
+ ✓ __tests__/integration/import-smart-deep.test.ts (15 tests) 195ms
+ ✓ __tests__/lib/gmail-parser.test.ts (12 tests) 18ms
+ ✓ __tests__/integration/copilot-chat-deep.test.ts (25 tests) 188ms
+ ✓ __tests__/integration/health-deep.test.ts (15 tests) 52ms
+ ✓ __tests__/integration/payroll.test.ts (11 tests) 37ms
+ ✓ __tests__/integration/client-detail.test.ts (9 tests) 55ms
+ ✓ __tests__/integration/v1-copilot-query.test.ts (2 tests) 26ms
+ ✓ __tests__/integration/reports-aging.test.ts (2 tests) 15ms
+ ✓ __tests__/integration/reports-cfo-brief-deep.test.ts (7 tests) 88ms
+ ✓ __tests__/integration/auth.test.ts (2 tests) 16ms
+ ✓ __tests__/integration/invoices-id.test.ts (6 tests) 54ms
+ ✓ __tests__/integration/transfer.test.ts (2 tests) 18ms
+ ✓ __tests__/integration/categories.test.ts (12 tests) 47ms
+ ✓ __tests__/integration/tds-compute.test.ts (13 tests) 93ms
+ ✓ __tests__/integration/import-history.test.ts (2 tests) 26ms
+ ✓ __tests__/integration/consolidation-deep.test.ts (3 tests) 23ms
+ ✓ __tests__/integration/gst-cleartax-deep.test.ts (6 tests) 75ms
+ ✓ __tests__/integration/invoices-remind-deep.test.ts (7 tests) 197ms
+ ✓ __tests__/integration/invoices.test.ts (9 tests) 160ms
+ ✓ __tests__/lib/api-auth.test.ts (12 tests) 50ms
+ ✓ __tests__/integration/billing-webhook.test.ts (1 test) 27ms
+ ✓ __tests__/integration/accounts.test.ts (8 tests) 102ms
+ ✓ __tests__/integration/suggest-category-deep.test.ts (7 tests) 21ms
+ ✓ __tests__/lib/roles.test.ts (37 tests) 15ms
+ ✓ __tests__/integration/v1-webhooks-inbound.test.ts (2 tests) 15ms
+ ✓ __tests__/integration/receipts-upload.test.ts (7 tests) 49ms
+ ✓ __tests__/lib/anomalies.test.ts (8 tests) 43ms
+ ✓ __tests__/integration/anomalies-deep.test.ts (11 tests) 73ms
+ ✓ __tests__/integration/invoices-id-payments.test.ts (4 tests) 45ms
+ ✓ __tests__/lib/auth.test.ts (16 tests) 50ms
+ ✓ __tests__/integration/invoice-email.test.ts (6 tests) 152ms
+ ✓ __tests__/integration/users.test.ts (2 tests) 20ms
+ ✓ __tests__/integration/users-id.test.ts (1 test) 23ms
+ ✓ __tests__/integration/tds.test.ts (2 tests) 14ms
+ ✓ __tests__/integration/metrics-saas.test.ts (5 tests) 67ms
+ ✓ __tests__/integration/invoices-action-deep.test.ts (7 tests) 23ms
+ ✓ __tests__/integration/recurring-expenses-deep.test.ts (15 tests) 80ms
+ ✓ __tests__/integration/import-smart.test.ts (10 tests) 51ms
+ ✓ __tests__/integration/reports-comparison-deep.test.ts (6 tests) 59ms
+ ✓ __tests__/integration/invoices-payments-deep.test.ts (8 tests) 31ms
+ ✓ __tests__/integration/import-invoice.test.ts (7 tests) 38ms
+ ✓ __tests__/lib/gst.test.ts (33 tests) 38ms
+ ✓ __tests__/integration/recurring-expenses.test.ts (10 tests) 37ms
+ ✓ __tests__/integration/dashboard.test.ts (3 tests) 15ms
+ ✓ __tests__/integration/recurring-expense-detail.test.ts (7 tests) 21ms
+ ✓ __tests__/integration/plugin-dashboard.test.ts (3 tests) 48ms
+ ✓ __tests__/integration/integrations-gmail-deep.test.ts (8 tests) 30ms
+ ✓ __tests__/integration/suggestions-aliases.test.ts (2 tests) 86ms
+ ✓ __tests__/integration/vendors-fingerprints.test.ts (4 tests) 22ms
+ ✓ __tests__/integration/activity.test.ts (2 tests) 12ms
+ ✓ __tests__/integration/clients.test.ts (8 tests) 51ms
+ ✓ __tests__/integration/bank-transactions.test.ts (13 tests) 50ms
+ ✓ __tests__/integration/invoices-auto-match-deep.test.ts (9 tests) 20ms
+ ✓ __tests__/integration/gst-cleartax.test.ts (2 tests) 33ms
+ ✓ __tests__/integration/accounting-trial-balance.test.ts (2 tests) 13ms
+ ✓ __tests__/integration/invoices-remind.test.ts (4 tests) 18ms
+ ✓ __tests__/integration/import-invoice-deep.test.ts (9 tests) 55ms
+ ✓ __tests__/integration/ap-inbox.test.ts (4 tests) 56ms
+ ✓ __tests__/integration/invoice-pdf.test.ts (4 tests) 69ms
+ ✓ __tests__/lib/payouts.test.ts (8 tests) 67ms
+ ✓ __tests__/integration/anomalies.test.ts (2 tests) 18ms
+ ✓ __tests__/integration/invoices-auto-match.test.ts (4 tests) 29ms
+ ✓ __tests__/integration/webhooks-inbound-email-deep.test.ts (7 tests) 25ms
+ ✓ __tests__/integration/webhooks-stripe.test.ts (7 tests) 81ms
+ ✓ __tests__/integration/webhooks-inbound-email.test.ts (2 tests) 29ms
+ ✓ __tests__/integration/onboarding-deep.test.ts (10 tests) 135ms
+ ✓ __tests__/lib/runway.test.ts (12 tests) 28ms
+ ✓ __tests__/integration/revenue-deep.test.ts (11 tests) 48ms
+ ✓ __tests__/lib/currency.test.ts (35 tests) 80ms
+ ✓ __tests__/integration/vendors-deep.test.ts (14 tests) 57ms
+ ✓ __tests__/integration/v1-expenses.test.ts (2 tests) 15ms
+ ✓ __tests__/integration/organizations-switch.test.ts (2 tests) 32ms
+ ✓ __tests__/integration/reports-cfo-brief.test.ts (4 tests) 66ms
+ ✓ __tests__/integration/plugin-heartbeat.test.ts (5 tests) 14ms
+ ✓ __tests__/integration/import-pdf.test.ts (5 tests) 21ms
+ ✓ __tests__/integration/bank-import.test.ts (6 tests) 82ms
+ ✓ __tests__/integration/invoices-id-email.test.ts (7 tests) 113ms
+ ✓ __tests__/integration/payroll-id.test.ts (13 tests) 87ms
+ ✓ __tests__/integration/reconciliation-deep.test.ts (21 tests) 93ms
+ ✓ __tests__/integration/invoices-id-deep.test.ts (8 tests) 61ms
+ ✓ __tests__/integration/onboarding.test.ts (2 tests) 59ms
+ ✓ __tests__/integration/forecast.test.ts (2 tests) 26ms
+ ✓ __tests__/integration/reconciliation-auto.test.ts (6 tests) 30ms
+ ✓ __tests__/integration/gst-returns.test.ts (4 tests) 19ms
+ ✓ __tests__/integration/copilot-query.test.ts (16 tests) 81ms
+ ✓ __tests__/integration/gmail-sync-deep.test.ts (9 tests) 54ms
+ ✓ __tests__/integration/inbound-webhook.test.ts (9 tests) 84ms
+ ✓ __tests__/integration/v1-copilot-action.test.ts (2 tests) 14ms
+ ✓ __tests__/integration/detect-recurring.test.ts (9 tests) 24ms
+ ✓ __tests__/integration/copilot-action.test.ts (9 tests) 23ms
+ ✓ __tests__/integration/transfer-deep.test.ts (13 tests) 45ms
+ ✓ __tests__/integration/settings-organization.test.ts (9 tests) 32ms
+ ✓ __tests__/integration/expenses-breakdown.test.ts (2 tests) 16ms
+ ✓ __tests__/integration/audit-route.test.ts (8 tests) 27ms
+ ✓ __tests__/integration/users-deep.test.ts (17 tests) 29ms
+ ✓ __tests__/lib/transaction-categorizer.test.ts (82 tests) 130ms
+ ✓ __tests__/integration/invoices-id-action.test.ts (2 tests) 14ms
+ ✓ __tests__/lib/smart-import.test.ts (40 tests) 26ms
+ ✓ __tests__/integration/accounting-chart.test.ts (8 tests) 30ms
+ ✓ __tests__/integration/founder-os-token.test.ts (5 tests) 26ms
+ ✓ __tests__/integration/reconciliation-auto-deep.test.ts (8 tests) 16ms
+ ✓ __tests__/integration/layout-counts.test.ts (2 tests) 14ms
+ ✓ __tests__/integration/gmail-sync.test.ts (7 tests) 86ms
+ ✓ __tests__/integration/payroll-action-deep.test.ts (10 tests) 32ms
+ ✓ __tests__/integration/receipts-id.test.ts (4 tests) 74ms
+ ✓ __tests__/lib/tds.test.ts (42 tests) 58ms
+ ✓ __tests__/integration/receipts.test.ts (4 tests) 83ms
+ ✓ __tests__/integration/consolidation.test.ts (4 tests) 16ms
+ ✓ __tests__/integration/v1-auth-founder-os-token.test.ts (1 test) 43ms
+ ✓ __tests__/integration/inbound-email-deep.test.ts (8 tests) 97ms
+ ✓ __tests__/integration/expenses-ocr.test.ts (2 tests) 14ms
+ ✓ __tests__/integration/tds-form16a.test.ts (2 tests) 16ms
+ ✓ __tests__/integration/gmail-callback-deep.test.ts (6 tests) 16ms
+ ✓ __tests__/integration/reports-pnl-csv.test.ts (2 tests) 28ms
+ ✓ __tests__/integration/integrations-gmail-sync.test.ts (2 tests) 42ms
+ ✓ __tests__/integration/expenses-id-deep.test.ts (8 tests) 48ms
+ ✓ __tests__/integration/invoices-id-pdf.test.ts (2 tests) 43ms
+ ✓ __tests__/integration/invoice-remind.test.ts (7 tests) 14ms
+ ✓ __tests__/integration/expenses-receipt-deep.test.ts (6 tests) 83ms
+ ✓ __tests__/integration/audit.test.ts (4 tests) 45ms
+ ✓ __tests__/integration/organizations.test.ts (7 tests) 102ms
+ ✓ __tests__/integration/reports-tax.test.ts (2 tests) 30ms
+ ✓ __tests__/lib/csv-importer.test.ts (40 tests) 36ms
+ ✓ __tests__/integration/fx-rates.test.ts (1 test) 13ms
+ ✓ __tests__/integration/reports-pnl-csv-deep.test.ts (3 tests) 22ms
+ ✓ __tests__/integration/reports-pnl.test.ts (2 tests) 25ms
+ ✓ __tests__/integration/expenses-id-receipt.test.ts (2 tests) 19ms
+ ✓ __tests__/integration/expenses-ocr-deep.test.ts (7 tests) 18ms
+ ✓ __tests__/integration/health.test.ts (2 tests) 18ms
+ ✓ __tests__/integration/tds-deep.test.ts (3 tests) 20ms
+ ✓ __tests__/integration/plugin-manifest.test.ts (7 tests) 13ms
+ ✓ __tests__/integration/organizations-switch-deep.test.ts (4 tests) 14ms
+ ✓ __tests__/integration/reports-cashflow.test.ts (2 tests) 13ms
+ ✓ __tests__/integration/billing-checkout.test.ts (2 tests) 9ms
+ ✓ __tests__/lib/ai-provider.test.ts (9 tests) 8ms
+ ✓ __tests__/integration/import-csv.test.ts (2 tests) 36ms
+ ✓ __tests__/lib/guards.test.ts (4 tests) 9ms
+ ✓ __tests__/lib/audit.test.ts (5 tests) 9ms
+ ✓ __tests__/integration/v1-plugin-manifest.test.ts (1 test) 14ms
+ ✓ __tests__/integration/expenses-confidence.test.ts (3 tests) 13ms
+ ✓ __tests__/integration/gst-hsn.test.ts (1 test) 11ms
+ ✓ __tests__/lib/tenant.test.ts (11 tests) 12ms
+ ✓ __tests__/lib/document-intelligence.test.ts (4 tests) 6ms
+ ✓ __tests__/integration/integrations-gmail-callback.test.ts (2 tests) 8ms
+ ✓ __tests__/integration/gst-hsn-deep.test.ts (1 test) 7ms
+
+ Test Files  196 passed (196)
+      Tests  1675 passed (1675)
+   Start at  10:22:46
+   Duration  12.48s (transform 13.80s, setup 0ms, import 48.96s, tests 11.15s, environment 61ms)
+
+ % Coverage report from v8
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-------------------|---------|----------|---------|---------|-------------------
+All files          |   95.96 |    82.53 |   97.19 |   97.17 |                   
+ ...counting/chart |   90.16 |    68.18 |   95.23 |   88.23 |                   
+  route.ts         |   90.16 |    68.18 |   95.23 |   88.23 | 81-86,116         
+ .../trial-balance |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ app/api/accounts  |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ app/api/activity  |   93.33 |       80 |     100 |     100 |                   
+  route.ts         |   93.33 |       80 |     100 |     100 | 15-16             
+ app/api/alerts    |     100 |    88.88 |     100 |     100 |                   
+  route.ts         |     100 |    88.88 |     100 |     100 | ...91,112,139,199 
+ app/api/anomalies |     100 |    86.04 |     100 |     100 |                   
+  route.ts         |     100 |    86.04 |     100 |     100 | 73-78,101,121     
+ app/api/ap-inbox  |     100 |    84.78 |     100 |     100 |                   
+  route.ts         |     100 |    84.78 |     100 |     100 | ...91,109,131-156 
+ app/api/audit     |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ .../bank/accounts |     100 |    68.33 |     100 |     100 |                   
+  route.ts         |     100 |    68.33 |     100 |     100 | ...69,113,119-128 
+ ...pi/bank/import |   89.93 |    71.71 |   88.88 |   91.72 |                   
+  route.ts         |   89.93 |    71.71 |   88.88 |   91.72 | ...78,342,360-370 
+ ...k/transactions |     100 |     84.9 |     100 |     100 |                   
+  route.ts         |     100 |     84.9 |     100 |     100 | 44-73,119-123,172 
+ ...lling/checkout |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...illing/webhook |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ app/api/budgets   |   96.77 |    78.57 |     100 |   96.61 |                   
+  route.ts         |   96.77 |    78.57 |     100 |   96.61 | 173-174           
+ ...api/categories |     100 |    93.75 |     100 |     100 |                   
+  route.ts         |     100 |    93.75 |     100 |     100 | 56                
+ app/api/clients   |     100 |    81.81 |     100 |     100 |                   
+  route.ts         |     100 |    81.81 |     100 |     100 | 19-20,26-27       
+ ...i/clients/[id] |     100 |    85.71 |     100 |     100 |                   
+  route.ts         |     100 |    85.71 |     100 |     100 | ...1-75,92-93,140 
+ ...iance/calendar |     100 |    91.17 |     100 |     100 |                   
+  route.ts         |     100 |    91.17 |     100 |     100 | 72,91,116         
+ .../consolidation |   93.65 |    81.81 |     100 |     100 |                   
+  route.ts         |   93.65 |    81.81 |     100 |     100 | 30-77,93,108-133  
+ ...i/copilot/chat |   82.64 |    81.72 |     100 |   82.45 |                   
+  route.ts         |   82.64 |    81.72 |     100 |   82.45 | ...25,129-130,181 
+ app/api/dashboard |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...tect-recurring |      87 |    70.65 |   88.23 |   92.95 |                   
+  route.ts         |      87 |    70.65 |   88.23 |   92.95 | ...02-204,249,317 
+ app/api/expenses  |     100 |     87.5 |     100 |     100 |                   
+  route.ts         |     100 |     87.5 |     100 |     100 | 31-32,73          
+ .../expenses/[id] |     100 |       90 |     100 |     100 |                   
+  route.ts         |     100 |       90 |     100 |     100 | 23                
+ ...s/[id]/receipt |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...nses/approvals |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...nses/breakdown |   97.56 |    88.88 |    87.5 |   97.29 |                   
+  route.ts         |   97.56 |    88.88 |    87.5 |   97.29 | 71                
+ ...ses/confidence |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...i/expenses/ocr |     100 |    76.66 |     100 |     100 |                   
+  route.ts         |     100 |    76.66 |     100 |     100 | 31,47-48,92-96    
+ ...ggest-category |     100 |    77.77 |     100 |     100 |                   
+  route.ts         |     100 |    77.77 |     100 |     100 | 20,33-37          
+ app/api/forecast  |   98.41 |    68.75 |     100 |     100 |                   
+  route.ts         |   98.41 |    68.75 |     100 |     100 | 50-96             
+ app/api/fx/rates  |      92 |    66.66 |     100 |      92 |                   
+  route.ts         |      92 |    66.66 |     100 |      92 | 60-61             
+ ...i/gst/cleartax |     100 |    81.25 |     100 |     100 |                   
+  route.ts         |     100 |    81.25 |     100 |     100 | 23-28,76          
+ ...i/gst/einvoice |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ app/api/gst/hsn   |      75 |      100 |     100 |      75 |                   
+  route.ts         |      75 |      100 |     100 |      75 | 68-69             
+ ...pi/gst/returns |     100 |       75 |     100 |     100 |                   
+  route.ts         |     100 |       75 |     100 |     100 | 54-56             
+ app/api/health    |   92.54 |    84.82 |     100 |   99.15 |                   
+  route.ts         |   92.54 |    84.82 |     100 |   99.15 | 226               
+ ...api/import/csv |     100 |    95.65 |     100 |     100 |                   
+  route.ts         |     100 |    95.65 |     100 |     100 | 65                
+ ...import/history |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...import/invoice |   98.27 |    78.57 |     100 |   98.24 |                   
+  route.ts         |   98.27 |    78.57 |     100 |   98.24 | 54                
+ ...api/import/pdf |   97.95 |    85.36 |     100 |   97.91 |                   
+  route.ts         |   97.95 |    85.36 |     100 |   97.91 | 199               
+ ...i/import/smart |   88.61 |    67.13 |   86.66 |    89.3 |                   
+  route.ts         |   88.61 |    67.13 |   86.66 |    89.3 | ...45-555,570,591 
+ ...grations/gmail |   93.93 |      100 |     100 |   93.75 |                   
+  route.ts         |   93.93 |      100 |     100 |   93.75 | 54-55             
+ ...gmail/callback |     100 |    93.75 |     100 |     100 |                   
+  route.ts         |     100 |    93.75 |     100 |     100 | 68                
+ ...ons/gmail/sync |   88.34 |    76.38 |    92.3 |   89.24 |                   
+  route.ts         |   88.34 |    76.38 |    92.3 |   89.24 | ...98-106,235-236 
+ app/api/invoices  |   97.91 |    83.33 |     100 |   97.77 |                   
+  route.ts         |   97.91 |    83.33 |     100 |   97.77 | 33                
+ .../invoices/[id] |     100 |    83.33 |     100 |     100 |                   
+  route.ts         |     100 |    83.33 |     100 |     100 | 48                
+ .../[id]/[action] |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...ces/[id]/email |     100 |    97.36 |     100 |     100 |                   
+  route.ts         |     100 |    97.36 |     100 |     100 | 41                
+ .../[id]/payments |     100 |       75 |     100 |     100 |                   
+  route.ts         |     100 |       75 |     100 |     100 | ...05-106,119-123 
+ ...oices/[id]/pdf |     100 |    88.46 |     100 |     100 |                   
+  route.ts         |     100 |    88.46 |     100 |     100 | 34,48,65          
+ ...ces/auto-match |   96.96 |    94.28 |   83.33 |     100 |                   
+  route.ts         |   96.96 |    94.28 |   83.33 |     100 | 61,124            
+ ...nvoices/remind |   93.87 |    74.19 |   93.33 |    95.4 |                   
+  route.ts         |   93.87 |    74.19 |   93.33 |    95.4 | 62,133,184,254    
+ .../layout-counts |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...i/metrics/saas |   98.14 |    84.37 |     100 |      98 |                   
+  route.ts         |   98.14 |    84.37 |     100 |      98 | 112               
+ ...api/onboarding |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ .../organizations |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...nizations/[id] |     100 |       85 |     100 |     100 |                   
+  route.ts         |     100 |       85 |     100 |     100 | 35-37             
+ ...zations/switch |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ app/api/payroll   |   99.09 |    83.09 |     100 |   98.94 |                   
+  route.ts         |   99.09 |    83.09 |     100 |   98.94 | 72                
+ ...i/payroll/[id] |    97.7 |       80 |     100 |   97.36 |                   
+  route.ts         |    97.7 |       80 |     100 |   97.36 | 93-94             
+ app/api/receipts  |     100 |    96.42 |     100 |     100 |                   
+  route.ts         |     100 |    96.42 |     100 |     100 | 64                
+ .../receipts/[id] |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...eceipts/upload |     100 |     90.9 |     100 |     100 |                   
+  route.ts         |     100 |     90.9 |     100 |     100 | 24,77             
+ ...reconciliation |   98.33 |     87.5 |   85.71 |     100 |                   
+  route.ts         |   98.33 |     87.5 |   85.71 |     100 | 77,95-105,180     
+ ...ciliation/auto |   92.94 |    68.93 |     100 |    92.2 |                   
+  route.ts         |   92.94 |    68.93 |     100 |    92.2 | 107-111,172       
+ ...rring-expenses |   92.55 |       75 |     100 |   92.39 |                   
+  route.ts         |   92.55 |       75 |     100 |   92.39 | 44,99-100,105-109 
+ ...-expenses/[id] |   98.64 |       75 |     100 |    98.5 |                   
+  route.ts         |   98.64 |       75 |     100 |    98.5 | 73                
+ .../reports/aging |    90.9 |    71.42 |     100 |     100 |                   
+  route.ts         |    90.9 |    71.42 |     100 |     100 | 39-47             
+ ...ports/cashflow |   83.33 |       75 |     100 |   83.33 |                   
+  route.ts         |   83.33 |       75 |     100 |   83.33 | 13-14             
+ ...orts/cfo-brief |   94.38 |    75.92 |   85.71 |   95.94 |                   
+  route.ts         |   94.38 |    75.92 |   85.71 |   95.94 | 36,123,129        
+ ...rts/comparison |   98.14 |    89.28 |    87.5 |   97.61 |                   
+  route.ts         |   98.14 |    89.28 |    87.5 |   97.61 | 70                
+ ...pi/reports/pdf |     100 |    72.22 |     100 |     100 |                   
+  route.ts         |     100 |    72.22 |     100 |     100 | 54-101,163-164    
+ ...pi/reports/pnl |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...eports/pnl/csv |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...pi/reports/tax |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ app/api/revenue   |   97.19 |    85.91 |     100 |     100 |                   
+  route.ts         |   97.19 |    85.91 |     100 |     100 | ...9,59,78-79,117 
+ ...s/organization |     100 |    82.14 |     100 |     100 |                   
+  route.ts         |     100 |    82.14 |     100 |     100 | 46-49,64          
+ ...stions/aliases |   94.33 |    66.66 |     100 |   96.07 |                   
+  route.ts         |   94.33 |    66.66 |     100 |   96.07 | 112-113           
+ app/api/tds       |     100 |    68.96 |     100 |     100 |                   
+  route.ts         |     100 |    68.96 |     100 |     100 | ...58,60-61,92-93 
+ ...pi/tds/compute |     100 |    97.56 |     100 |     100 |                   
+  route.ts         |     100 |    97.56 |     100 |     100 | 41                
+ ...pi/tds/form16a |     100 |     92.3 |     100 |     100 |                   
+  route.ts         |     100 |     92.3 |     100 |     100 | 31,50             
+ app/api/transfer  |   97.22 |    95.45 |     100 |   97.14 |                   
+  route.ts         |   97.22 |    95.45 |     100 |   97.14 | 138               
+ app/api/users     |     100 |       95 |     100 |     100 |                   
+  route.ts         |     100 |       95 |     100 |     100 | 69                
+ ...api/users/[id] |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...under-os-token |     100 |    83.33 |     100 |     100 |                   
+  route.ts         |     100 |    83.33 |     100 |     100 | 55                
+ ...copilot/action |   91.48 |    82.75 |     100 |   91.48 |                   
+  route.ts         |   91.48 |    82.75 |     100 |   91.48 | 109,132,174-175   
+ .../copilot/query |   88.28 |    68.47 |    92.3 |   96.29 |                   
+  route.ts         |   88.28 |    68.47 |    92.3 |   96.29 | 202-204,265       
+ ...pi/v1/expenses |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...pi/v1/invoices |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...ugin/dashboard |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...ugin/heartbeat |   88.88 |    76.92 |    90.9 |   97.43 |                   
+  route.ts         |   88.88 |    76.92 |    90.9 |   97.43 | 86                
+ ...lugin/manifest |      60 |      100 |     100 |      60 |                   
+  route.ts         |      60 |      100 |     100 |      60 | 43-44             
+ ...bhooks/inbound |      90 |    69.64 |     100 |      90 |                   
+  route.ts         |      90 |    69.64 |     100 |      90 | 31-32,62,89,117   
+ app/api/vendors   |     100 |    89.47 |     100 |     100 |                   
+  route.ts         |     100 |    89.47 |     100 |     100 | 32-46,109         
+ ...i/vendors/[id] |     100 |      100 |     100 |     100 |                   
+  route.ts         |     100 |      100 |     100 |     100 |                   
+ ...s/fingerprints |     100 |    88.46 |     100 |     100 |                   
+  route.ts         |     100 |    88.46 |     100 |     100 | 55-63             
+ .../inbound-email |     100 |     75.6 |     100 |     100 |                   
+  route.ts         |     100 |     75.6 |     100 |     100 | 120-122,124-136   
+ ...ebhooks/stripe |     100 |    84.37 |     100 |     100 |                   
+  route.ts         |     100 |    84.37 |     100 |     100 | 30,57,76-77,107   
+ lib               |   97.32 |    89.98 |    98.8 |   98.57 |                   
+  ai-provider.ts   |   96.87 |    91.66 |     100 |     100 | 95                
+  anomalies.ts     |     100 |       96 |     100 |     100 | 79                
+  api-auth.ts      |     100 |      100 |     100 |     100 |                   
+  audit.ts         |     100 |      100 |     100 |     100 |                   
+  auth.ts          |     100 |      100 |     100 |     100 |                   
+  bank-import.ts   |   98.22 |    88.88 |     100 |   98.67 | 302-303           
+  csv-importer.ts  |   93.54 |    85.81 |     100 |     100 | ...96,405-407,410 
+  currency.ts      |    97.5 |    89.74 |     100 |   96.66 | 64                
+  ...telligence.ts |     100 |      100 |     100 |     100 |                   
+  ...telligence.ts |   99.08 |    92.59 |     100 |      99 | 228               
+  ...der-os-jwt.ts |     100 |    88.88 |     100 |     100 | 49-55             
+  gmail-parser.ts  |   98.41 |    95.83 |     100 |   98.24 | 100               
+  gst.ts           |     100 |      100 |     100 |     100 |                   
+  guards.ts        |     100 |      100 |     100 |     100 |                   
+  logger.ts        |   93.33 |    85.71 |   94.11 |   95.12 | 222-223,253,314   
+  payouts.ts       |      96 |       75 |     100 |     100 | 27-28,46,69,94    
+  pdf.ts           |    98.7 |    88.57 |     100 |    98.7 | 185-186           
+  rbac.ts          |     100 |     92.5 |     100 |     100 | 120,126,134       
+  roles.ts         |     100 |      100 |     100 |     100 |                   
+  runway.ts        |     100 |      100 |     100 |     100 |                   
+  smart-import.ts  |     100 |    98.03 |     100 |     100 | 16                
+  tds.ts           |     100 |      100 |     100 |     100 |                   
+  tenant.ts        |     100 |      100 |     100 |     100 |                   
+  ...ategorizer.ts |   86.56 |    77.08 |   85.71 |   92.06 | ...25,282,297,354 
+  webhooks.ts      |     100 |      100 |     100 |     100 |                   
+-------------------|---------|----------|---------|---------|-------------------

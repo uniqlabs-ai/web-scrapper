@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    user: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    user: { findMany: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     activityLog: { create: vi.fn() },
   },
 }));
@@ -25,7 +25,7 @@ const mcp = vi.mocked(checkPermission);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mcp.mockResolvedValue({ allowed: true, user: { id: 'u1' }, error: null, status: 200 } as any);
+  mcp.mockResolvedValue({ allowed: true, user: { id: 'u1', organizationId: 'org-1' }, error: null, status: 200 } as any);
 });
 
 function req(method='GET', url='http://localhost:3008/api/users', body?:unknown): NextRequest {
@@ -77,7 +77,7 @@ describe('POST /api/users', () => {
     const res = await POST(req('POST', 'http://localhost:3008/api/users', { email: 'x@b.com', role: 'superadmin' }));
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.error).toContain('Invalid role');
+    expect(data.error).toBe('Invalid payload');
   });
 
   it('returns 409 when email already exists', async () => {
@@ -110,6 +110,7 @@ describe('POST /api/users', () => {
 
 describe('PATCH /api/users/[id]', () => {
   it('updates user role successfully', async () => {
+    mp.user.findFirst.mockResolvedValue({ id: 'u1', organizationId: 'org-1' } as any);
     mp.user.update.mockResolvedValue({ id: 'u1', email: 'a@b.com', fullName: 'Updated', role: 'accountant', createdAt: new Date() } as any);
     const r = req('PATCH', 'http://localhost:3008/api/users/u1', { role: 'accountant' });
     const res = await PATCH(r, { params: Promise.resolve({ id: 'u1' }) });
@@ -125,6 +126,7 @@ describe('PATCH /api/users/[id]', () => {
   });
 
   it('updates fullName and permissions', async () => {
+    mp.user.findFirst.mockResolvedValue({ id: 'u1', organizationId: 'org-1' } as any);
     mp.user.update.mockResolvedValue({ id: 'u1', email: 'a@b.com', fullName: 'NewName', role: 'admin', createdAt: new Date() } as any);
     const r = req('PATCH', 'http://localhost:3008/api/users/u1', { fullName: 'NewName', permissions: { read: true } });
     const res = await PATCH(r, { params: Promise.resolve({ id: 'u1' }) });
@@ -135,6 +137,7 @@ describe('PATCH /api/users/[id]', () => {
   });
 
   it('handles null permissions', async () => {
+    mp.user.findFirst.mockResolvedValue({ id: 'u1', organizationId: 'org-1' } as any);
     mp.user.update.mockResolvedValue({ id: 'u1', email: 'a@b.com', fullName: 'Test', role: 'admin', createdAt: new Date() } as any);
     const r = req('PATCH', 'http://localhost:3008/api/users/u1', { permissions: null });
     const res = await PATCH(r, { params: Promise.resolve({ id: 'u1' }) });
@@ -144,6 +147,7 @@ describe('PATCH /api/users/[id]', () => {
   });
 
   it('returns 404 when user not found (P2025)', async () => {
+    mp.user.findFirst.mockResolvedValue({ id: 'u-missing', organizationId: 'org-1' } as any);
     const err: any = new Error('Not found');
     err.code = 'P2025';
     mp.user.update.mockRejectedValue(err);

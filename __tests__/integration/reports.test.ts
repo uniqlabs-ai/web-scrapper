@@ -32,7 +32,7 @@ describe('GET /api/reports/pnl', () => {
   it('passes custom dates', async () => {
     vi.mocked(generatePnL).mockResolvedValue({} as any);
     await GET(req('http://localhost:3008/api/reports/pnl?from=2025-04-01&to=2025-06-30'));
-    expect(vi.mocked(generatePnL)).toHaveBeenCalledWith('u1', expect.any(Date), expect.any(Date));
+    expect(vi.mocked(generatePnL)).toHaveBeenCalledWith('u1', 'org-1', expect.any(Date), expect.any(Date));
   });
 
   it('returns 500 on error', async () => {
@@ -74,7 +74,7 @@ describe('GET /api/reports/tax', () => {
   it('passes custom date range', async () => {
     vi.mocked(calculateGSTSummary).mockResolvedValue({} as any);
     await GET(req('http://localhost:3008/api/reports/tax?from=2025-01-01&to=2025-03-31'));
-    expect(vi.mocked(calculateGSTSummary)).toHaveBeenCalledWith('u1', expect.any(Date), expect.any(Date));
+    expect(vi.mocked(calculateGSTSummary)).toHaveBeenCalledWith('u1', 'org-1', expect.any(Date), expect.any(Date));
   });
 
   it('returns 500 on error', async () => {

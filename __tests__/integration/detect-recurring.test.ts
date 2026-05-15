@@ -124,6 +124,90 @@ describe('GET /api/detect-recurring', () => {
     if (fee) expect(fee.kind).toBe('subscription');
   });
 
+  it('handles name extraction prefixes and noise stripping', async () => {
+    (mp.expense.findMany as any).mockResolvedValue([
+      { description:'BIL/ONL/001174143 662/Amazon Web Services~xyz', amount:2000, date:new Date('2025-01-15'), vendor:null },
+      { description:'MMT/IMPS/123456789/MakeMyTrip', amount:2000, date:new Date('2025-02-15'), vendor:null },
+      { description:'INF/NEFT/HDFC0001234/VFS Global', amount:2000, date:new Date('2025-03-15'), vendor:null },
+      { description:'GRS/123456/Stripe Payments', amount:2000, date:new Date('2025-04-15'), vendor:null },
+      { description:'FT-MPS-1234/GitHub Inc.', amount:2000, date:new Date('2025-05-15'), vendor:null },
+    ]);
+    const res = await GET();
+    const d = await res.json();
+    expect(res.status).toBe(200);
+  });
+
+  it('excludes noise transactions like tax and FD', async () => {
+    (mp.expense.findMany as any).mockResolvedValue([
+      { description:'FD no 12345', amount:2000, date:new Date('2025-01-15'), vendor:null },
+      { description:'FD no 12345', amount:2000, date:new Date('2025-02-15'), vendor:null },
+      { description:'GST PAYMENT P12345678901', amount:2000, date:new Date('2025-01-15'), vendor:null },
+      { description:'GST PAYMENT P12345678901', amount:2000, date:new Date('2025-02-15'), vendor:null },
+      { description:'XY', amount:2000, date:new Date('2025-01-15'), vendor:null }, // < 3 alpha
+      { description:'XY', amount:2000, date:new Date('2025-02-15'), vendor:null },
+    ]);
+    const res = await GET();
+    const d = await res.json();
+    expect(d.subscriptions).toHaveLength(0);
+    expect(d.payroll).toHaveLength(0);
+  });
+
+  it('guesses various frequencies', async () => {
+    (mp.expense.findMany as any).mockResolvedValue([
+      { description:'Quarterly Sub', amount:2000, date:new Date('2025-01-15'), vendor:null },
+      { description:'Quarterly Sub', amount:2000, date:new Date('2025-04-15'), vendor:null }, // ~3 months gap -> quarterly
+      { description:'Half-yearly Sub', amount:2000, date:new Date('2025-01-15'), vendor:null },
+      { description:'Half-yearly Sub', amount:2000, date:new Date('2025-07-15'), vendor:null }, // ~6 months gap -> half-yearly
+      { description:'Yearly Sub', amount:2000, date:new Date('2025-01-15'), vendor:null },
+      { description:'Yearly Sub', amount:2000, date:new Date('2026-01-15'), vendor:null }, // ~12 months gap -> yearly
+    ]);
+    const res = await GET();
+    const d = await res.json();
+    const q = d.subscriptions.find((s:any) => s.name === 'Quarterly Sub');
+    const h = d.subscriptions.find((s:any) => s.name === 'Halfyearly Sub');
+    const y = d.subscriptions.find((s:any) => s.name === 'Yearly Sub');
+    if (q) expect(q.frequency).toBe('quarterly');
+    if (h) expect(h.frequency).toBe('half-yearly');
+    if (y) expect(y.frequency).toBe('yearly');
+  });
+
+  it('classifies VFS/insurance keywords as subscription not payroll', async () => {
+    (mp.expense.findMany as any).mockResolvedValue([
+      { description: 'VFS Global Fee', amount: 5000, date: new Date('2025-01-15'), vendor: null },
+      { description: 'VFS Global Fee', amount: 5000, date: new Date('2025-02-15'), vendor: null },
+      { description: 'VFS Global Fee', amount: 5000, date: new Date('2025-03-15'), vendor: null },
+    ]);
+    const res = await GET();
+    const d = await res.json();
+    const vfs = d.subscriptions.find((s: any) => s.name.toLowerCase().includes('vfs'));
+    if (vfs) expect(vfs.kind).toBe('subscription');
+  });
+
+  it('classifies salary-like names with consistent amounts as payroll', async () => {
+    (mp.expense.findMany as any).mockResolvedValue([
+      { description: 'SALARY Rajesh Kumar', amount: 50000, date: new Date('2025-01-28'), vendor: null },
+      { description: 'SALARY Rajesh Kumar', amount: 50000, date: new Date('2025-02-28'), vendor: null },
+      { description: 'SALARY Rajesh Kumar', amount: 50000, date: new Date('2025-03-28'), vendor: null },
+    ]);
+    const res = await GET();
+    const d = await res.json();
+    const rajesh = [...d.payroll, ...d.subscriptions].find((s: any) => s.name.toLowerCase().includes('rajesh'));
+    if (rajesh) {
+      expect(['payroll_fixed', 'payroll_variable']).toContain(rajesh.kind);
+    }
+  });
+
+  it('classifies variable-amount salary as payroll_variable', async () => {
+    (mp.expense.findMany as any).mockResolvedValue([
+      { description: 'NEFT Anita Employee', amount: 45000, date: new Date('2025-01-28'), vendor: null },
+      { description: 'NEFT Anita Employee', amount: 52000, date: new Date('2025-02-28'), vendor: null },
+      { description: 'NEFT Anita Employee', amount: 48000, date: new Date('2025-03-28'), vendor: null },
+    ]);
+    const res = await GET();
+    const d = await res.json();
+    expect(res.status).toBe(200);
+  });
+
   it('returns 500 on error', async () => {
     mt.mockRejectedValue(new Error('fail'));
     const res = await GET();

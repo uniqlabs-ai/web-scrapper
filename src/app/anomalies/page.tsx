@@ -5,6 +5,7 @@ import { clientLog } from "@/lib/client-logger";
 import { useState, useEffect } from "react";
 import { AlertTriangle, RefreshCw, Shield, CheckCircle, XCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { formatCurrency } from "@/lib/currency";
 
 interface Anomaly {
@@ -107,15 +108,15 @@ export default function AnomaliesPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: 60, color: "var(--text-secondary)" }}>Scanning spending patterns...</div>
       ) : activeAnomalies.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 80, background: "var(--bg-card)", borderRadius: 16, border: "1px solid rgba(34,197,94,0.2)" }}>
-          <Shield size={48} style={{ opacity: 0.3, marginBottom: 16, color: "#22C55E" }} />
-          <h3 style={{ margin: "0 0 8px", color: "#22C55E" }}>All Clear</h3>
-          <p style={{ margin: 0, color: "var(--text-secondary)" }}>
-            {resolvedCount > 0
+        <EmptyState
+          icon={Shield}
+          title="All Clear"
+          description={
+            resolvedCount > 0
               ? `${resolvedCount} anomalies resolved this session. No remaining issues.`
-              : "No spending anomalies detected. Your finances look healthy!"}
-          </p>
-        </div>
+              : "No spending anomalies detected. Your finances look healthy!"
+          }
+        />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {anomalies.map((a, i) => {
